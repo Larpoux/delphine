@@ -1,0 +1,90 @@
+{
+        "name": "delphine-preview",
+        "displayName": "Delphine Preview",
+        "description": "Custom editor + preview webview for Delphine forms",
+        "version": "0.0.1",
+        "publisher": "your-publisher",
+        "license": "MIT",
+        "repository": {
+                "type": "git",
+                "url": "https://github.com/Microsoft/vscode-extension-samples"
+        },
+        "engines": {
+                "vscode": "^1.90.0"
+        },
+        "categories": [
+                "Other"
+        ],
+        "main": "./out/extension.js",
+        "activationEvents": [
+                "onCommand:delphine.preview",
+                "onCommand:delphine.openEditor",
+                "onCustomEditor:delphine.customEditor"
+        ],
+        "contributes": {
+                "commands": [
+                        {
+                                "command": "delphine.preview",
+                                "title": "Preview",
+                                "category": "Delphine"
+                        },
+                        {
+                                "command": "delphine.openEditor",
+                                "title": "Open Delphine Editor",
+                                "category": "Delphine"
+                        }
+                ],
+                "customEditors": [
+                        {
+                                "viewType": "delphine.customEditor",
+                                "displayName": "Delphine Custom Editor",
+                                "selector": [
+                                        {
+                                                "filenamePattern": "*.html"
+                                        }
+                                ],
+                                "priority": "option"
+                        }
+                ],
+                "menus": {
+                        "editor/title": [
+                                {
+                                        "when": "resourceLangId == html",
+                                        "command": "delphine.preview",
+                                        "group": "navigation"
+                                },
+                                {
+                                        "when": "resourceLangId == html",
+                                        "command": "delphine.openEditor",
+                                        "group": "navigation"
+                                }
+                        ]
+                }
+        },
+        "keywords": [
+                "grapes",
+                "grapesjs",
+                "wysiwyg",
+                "web",
+                "template",
+                "editor",
+                "newsletter",
+                "site",
+                "builder"
+        ],
+        "scripts": {
+                "vscode:prepublish": "npm run compile",
+                "compile": "tsc -p ./",
+                "watch": "tsc -watch -p ./",
+                "lint": "eslint .",
+                "test": "node ./out/test/runTest.js"
+        },
+        "devDependencies": {
+                "@types/node": "^20.0.0",
+                "@types/vscode": "^1.90.0",
+                "@typescript-eslint/eslint-plugin": "^8.0.0",
+                "@typescript-eslint/parser": "^8.0.0",
+                "eslint": "^9.0.0",
+                "typescript": "^5.4.0"
+        }
+}
