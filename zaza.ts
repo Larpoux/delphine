@@ -53,27 +53,7 @@ class MyApplication extends TApplication {
         }
 
         zaza: Zaza;
-
-        forceFocus() {
-                try {
-                        // rendre le body focusable
-                        if (document.body && document.body.tabIndex < 0) document.body.tabIndex = -1;
-                        window.focus();
-                        document.body?.focus();
-                        console.log('forceFocus done', { hasFocus: document.hasFocus() });
-                } catch (e) {
-                        console.log('forceFocus failed', e);
-                }
-        }
-
         run() {
-                window.addEventListener('load', () => {
-                        this.forceFocus();
-                        // re-tentative courte (VSCode peut “re-hooker” la webview juste après)
-                        setTimeout(this.forceFocus, 0);
-                        setTimeout(this.forceFocus, 50);
-                        setTimeout(this.forceFocus, 200);
-                });
                 //this.zaza.componentRegistry.buildComponentTree(this.zaza);
                 //this.zaza.addEventListener('click');
 

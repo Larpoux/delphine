@@ -1,19 +1,14 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "commonjs",
-    "lib": [
-      "ES2022",
-      "DOM"
-    ],
-    "outDir": "out",
-    "rootDir": "src",
-    "strict": true,
-    "sourceMap": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true
-  },
-  "include": [
-    "src"
-  ]
+        "compilerOptions": {
+                "target": "ES2022",
+                "module": "commonjs",
+                "lib": ["ES2022", "DOM"],
+                "outDir": "out",
+                "rootDir": "src",
+                "strict": true,
+                "sourceMap": true,
+                "esModuleInterop": true,
+                "skipLibCheck": true
+        },
+        "include": ["src", "media/**/*.d.ts"]
 }

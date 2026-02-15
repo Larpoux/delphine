@@ -86,5 +86,11 @@
                 "@typescript-eslint/parser": "^8.0.0",
                 "eslint": "^9.0.0",
                 "typescript": "^5.4.0"
+        },
+        "dependencies": {
+                "grapesjs": "^0.22.14",
+                "parse5": "^8.0.0",
+                "prettier": "^3.8.1",
+                "toto": "^0.0.2"
         }
 }

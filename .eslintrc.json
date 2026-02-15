@@ -1,0 +1,20 @@
+{
+        "env": {
+                "browser": true,
+                "es2023": true
+        },
+        "extends": ["eslint:recommended", "prettier", "plugin:@typescript-eslint/recommended"],
+        "rules": {
+                "curly": "off",
+                "brace-style": ["error", "1tbs", { "allowSingleLine": false }],
+                "indent": ["error", 8],
+                "key-spacing": ["error", { "align": "value" }],
+                "space-in-parens": ["error", "never"],
+                "arrow-parens": ["error", "always"],
+                "padding-line-between-statements": ["error", { "blankLine": "always", "prev": "*", "next": "return" }]
+        },
+
+        "root": true,
+        "parser": "@typescript-eslint/parser",
+        "plugins": ["@typescript-eslint"]
+}

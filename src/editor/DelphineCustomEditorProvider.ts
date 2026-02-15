@@ -145,6 +145,52 @@ export class DelphineCustomEditorProvider implements vscode.CustomTextEditorProv
         }
 
         async resolveCustomTextEditor(document: vscode.TextDocument, webviewPanel: vscode.WebviewPanel, _token: vscode.CancellationToken): Promise<void> {
+                let lastRev = 0;
+                webviewPanel.webview.onDidReceiveMessage(async (msg) => {
+                        //const msg = await e;
+                        console.log(`[VSCode] ${msg.type} <- from bootEditor`);
+                        switch (msg.type) {
+                                case 'alert':
+                                        vscode.window.showErrorMessage(msg.text);
+                                        return;
+
+                                case 'log':
+                                        console.log(`[VSCode] ${msg.type} <- from bootEditor : '${msg.text}'`);
+                                        return;
+
+                                case 'contentChanged':
+                                        if (msg.rev && msg.rev <= lastRev) return;
+                                        lastRev = msg.rev ?? lastRev + 1;
+
+                                        //const prettyHtml = await formatHtml(msg.html ?? "");
+                                        //const prettyCss  = await formatCss(msg.css ?? "");
+                                        // Actually zaza.js is hard coded here. Should be modified TODO
+                                        const prettyDoc = await formatHtml(
+                                                `<!DOCTYPE html> 
+<html lang="en-US"> <head> <meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=Edge"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Cat Scratch Editor</title><style>` +
+                                                        msg.css +
+                                                        `</style></head>` +
+                                                        msg.html +
+                                                        `</html>`
+                                        );
+
+                                        await this.updateTextDocument(document, prettyDoc);
+                                        return;
+
+                                case 'bootEditor:ready':
+                                        updateWebview();
+                                        return;
+
+                                case 'bootEditor:loaded':
+                                        updateWebview();
+                                        return;
+                        }
+                });
+                console.log('[VSCODE] vsc:ready -> bootEditor');
+                void webviewPanel.webview.postMessage({
+                        type: 'vsc:ready'
+                });
+
                 this._extensionUri = DelphineCustomEditorProvider._context.extensionUri;
                 webviewPanel.webview.options = {
                         enableScripts: true,
@@ -161,6 +207,7 @@ export class DelphineCustomEditorProvider implements vscode.CustomTextEditorProv
                 const updateWebview = () => {
                         const { bodyInnerHtml, cssText } = splitHtmlForGrapes(document.getText());
 
+                        console.log(`[VSCode] doc:update -> bootEditor`);
                         void webviewPanel.webview.postMessage({
                                 html: bodyInnerHtml,
                                 type: 'doc:update',
@@ -205,6 +252,7 @@ export class DelphineCustomEditorProvider implements vscode.CustomTextEditorProv
                 webviewPanel.onDidDispose(() => changeSubscription.dispose());
 
                 // Receive messages from the webview.
+                /*
                 webviewPanel.webview.onDidReceiveMessage((msg) => {
                         if (!msg || typeof msg.type !== 'string') return;
 
@@ -213,42 +261,9 @@ export class DelphineCustomEditorProvider implements vscode.CustomTextEditorProv
                                 this.replaceDocument(document, msg.text);
                         }
                 });
-                let lastRev = 0;
-                webviewPanel.webview.onDidReceiveMessage(async (msg) => {
-                        //const msg = await e;
-                        switch (msg.type) {
-                                case 'alert':
-                                        vscode.window.showErrorMessage(msg.text);
-                                        return;
-
-                                case 'log':
-                                        console.log(msg.msg);
-                                        return;
-
-                                case 'contentChanged': {
-                                        if (msg.rev && msg.rev <= lastRev) return;
-                                        lastRev = msg.rev ?? lastRev + 1;
-
-                                        //const prettyHtml = await formatHtml(msg.html ?? "");
-                                        //const prettyCss  = await formatCss(msg.css ?? "");
-                                        // Actually zaza.js is hard coded here. Should be modified TODO
-                                        const prettyDoc = await formatHtml(
-                                                `<!DOCTYPE html> 
-<html lang="en-US"> <head> <meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=Edge"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Cat Scratch Editor</title><style>` +
-                                                        msg.css +
-                                                        `</style></head>` +
-                                                        msg.html +
-                                                        `</html>`
-                                        );
-
-                                        await this.updateTextDocument(document, prettyDoc);
-                                        return;
-                                }
-                        }
-                });
-
+                */
                 // Initial content.
-                updateWebview();
+                // updateWebview(); // Not necessary
         }
 
         private buildHtml(webview: vscode.Webview, document: vscode.TextDocument): string {

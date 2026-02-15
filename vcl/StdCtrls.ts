@@ -216,34 +216,6 @@ export class TForm extends TComponent {
                 const { signal } = ac;
 
                 console.log('Installing global debug listeners (reset+reinstall)');
-                console.log('FOCUS STATE', {
-                        hasFocus: document.hasFocus(),
-                        activeElement: document.activeElement?.tagName,
-                        visibility: document.visibilityState
-                });
-
-                window.addEventListener('focus', () => console.log('WINDOW FOCUS'), { capture: true, signal });
-                window.addEventListener('blur', () => console.log('WINDOW BLUR'), { capture: true, signal });
-                document.addEventListener('visibilitychange', () => console.log('VIS', document.visibilityState), { capture: true, signal });
-
-                // watchdog: si vous cliquez et que rien n’arrive, regardez si hasFocus reste false
-                setInterval(() => {
-                        console.log('TICK', { hasFocus: document.hasFocus(), vis: document.visibilityState });
-                        console.log('[probe] activeElement', document.activeElement?.tagName, (document.activeElement as any)?.id);
-                        console.log('[probe] btn exists', !!document.getElementById('btn'));
-                }, 2000);
-
-                document.addEventListener('click', (e) => console.log('DOC CAPTURE', e.target), { capture: true, signal });
-                document.addEventListener('click', (e) => console.log('DOC BUBBLE', e.target), { capture: false, signal });
-                window.addEventListener('click', (e) => console.log('WIN', e.target), { capture: true, signal });
-                document.body?.addEventListener('click', (e) => console.log('BODY', e.target), { capture: true, signal });
-
-                document.addEventListener('pointerdown', (e) => console.log('PD', e.target), { capture: true, signal });
-                document.addEventListener('pointerup', (e) => console.log('PU', e.target), { capture: true, signal });
-                document.addEventListener('mousedown', (e) => console.log('MD', e.target), { capture: true, signal });
-                document.addEventListener('mouseup', (e) => console.log('MU', e.target), { capture: true, signal });
-
-                document.addEventListener('pointermove', () => console.log('PMOVE'), { capture: true, signal });
 
                 const root = this.elem;
                 if (!root) return;

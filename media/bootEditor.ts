@@ -1,5 +1,8 @@
 // boot.ts (compiled to boot.js)
-// English comments as requested.
+
+import { asyncWrapProviders } from 'async_hooks';
+import * as GrapesJS from 'grapesjs';
+//import 'grapesjs/dist/css/grapes.min.css';
 //import * as vscode from 'vscode';
 
 console.log('[boot] top?', window === window.top);
@@ -11,6 +14,11 @@ type VsCodeApi = {
         setState?: (s: any) => void;
         getState?: () => any;
 };
+
+function log(text: string) {
+        vscode?.postMessage?.({ type: 'log', text: `[boot] ${text}` });
+        console.log(`[boot] ${text}`);
+}
 
 function findAcquireVsCodeApiFn(): (() => VsCodeApi) | undefined {
         // We may run inside an iframe (fake.html). VS Code might inject the API in a parent frame.
@@ -30,23 +38,24 @@ function findAcquireVsCodeApiFn(): (() => VsCodeApi) | undefined {
 const acquireFn = findAcquireVsCodeApiFn();
 const vscode = acquireFn ? acquireFn() : undefined;
 
-console.log('[bootEditor] frame', { top: window === window.top, hasApi: !!vscode });
+//console.log('[bootEditor] frame', { top: window === window.top, hasApi: !!vscode });
 
-vscode?.postMessage({ type: 'bootEditor:loaded' });
+//vscode?.postMessage({ type: 'bootEditor:loaded' });
 // Bridge: reçoit les messages des iframes (canvas GrapesJS) et les forward à VS Code
-window.addEventListener('message', (ev) => {
+/*window.addEventListener('message', (ev) => {
         const msg = ev.data;
         if (!msg || msg.__delphine !== true) return;
 
         vscode?.postMessage(msg.payload);
 });
+*/
 
-function postToVsCode(payload: any) {
-        // postMessage marche même cross-origin, contrairement à accéder parent.acquireVsCodeApi
-        window.parent.postMessage({ __delphine: true, payload }, '*');
-}
+//function postToVsCode(payload: any) {
+//        // postMessage marche même cross-origin, contrairement à accéder parent.acquireVsCodeApi
+//        window.parent.postMessage({ __delphine: true, payload }, '*');
+//}
 
-console.log('[boot] bridge installed');
+//log('[boot] bridge installed');
 
 // Safe wrapper (works also outside VSCode, eg. in browser)
 /*
@@ -76,7 +85,23 @@ function grapesJSEditor(grapesJs: GrapesJsApi) {
         //vscode.postMessage({ type: 'log', msg: 'et AH AH AH' });
         //console.log('et AH AH AH' );
 
-        var editor = grapesJs.init({
+        let isApplyingFromVscode = false;
+        //let lastHtmlExported = '';
+        //let lastCssExported = '';
+        //let rev = 0;
+
+        let inRte = false;
+        let rteDirty = false;
+
+        let pendingExport = false;
+        let rev = 0;
+        let lastExportHtml = '';
+        let lastExportCss = '';
+
+        let inTextEdit = false;
+        let pendingDirty = false;
+
+        var editor: GrapesJS.Editor = grapesJs.init({
                 showOffsets: 1,
                 noticeOnUnload: 0,
                 container: '#gjs',
@@ -118,32 +143,24 @@ function grapesJSEditor(grapesJs: GrapesJsApi) {
                         ]
                 }
         });
-
-        let isApplyingFromVscode = false;
-        let pending = false;
-        let lastHtml = '';
-        let lastCss = '';
-        let rev = 0;
-
-        let inRte = false;
-        let rteDirty = false;
-
+        // Send a message to VSCode saying that the document is changed
         function exportNow(reason: string) {
                 //const vscode = getVsCodeApi();
-                const html = editor.getHtml(); // <- je conseille ça plutôt que wrapper.toHTML pour commencer
+                const wrapper = editor.getWrapper();
+                const html = wrapper ? wrapper.toHTML!() : editor.getHtml();
                 const css = editor.getCss();
 
-                if (html === lastHtml && css === lastCss) return;
-                lastHtml = html;
-                lastCss = css;
+                if (html === lastExportHtml && css === lastExportCss) return; // Not changed. Skip
+                lastExportHtml = html;
+                lastExportCss = css!;
 
-                //vscode?.postMessage({ type: 'contentChanged', html, css, rev: ++rev, reason });
-                // vscode.postMessage(...)
-                postToVsCode({ type: 'contentChanged', html, css, reason, rev: ++rev });
+                //postToVsCode({ type: 'contentChanged', html, css, reason, rev: ++rev }); // Send the new valeus to VSCode
+                log('contentChanged -> VSCode');
+                vscode?.postMessage?.({ type: 'contentChanged', html: html, css: css, reason: reason, rev: ++rev });
         }
 
         function scheduleExport(reason: string) {
-                if (isApplyingFromVscode) return;
+                if (isApplyingFromVscode) return; // If the modification is originate from VSCode, we don't want to sendback a new event
 
                 // During RTE typing: don't export yet (model can be "behind")
                 if (inRte) {
@@ -151,31 +168,60 @@ function grapesJSEditor(grapesJs: GrapesJsApi) {
                         return;
                 }
 
-                if (pending) return;
-                pending = true;
+                if (pendingExport) return; // We already have an event waiting
+                pendingExport = true;
 
                 requestAnimationFrame(() => {
-                        pending = false;
-                        if (isApplyingFromVscode) return;
+                        pendingExport = false;
+                        if (isApplyingFromVscode) return; // If the modification is originate from VSCode, we don't want to sendback a new event
                         exportNow(reason);
                 });
         }
 
-        console.log('[editorBoot] GrapesJS ready');
+        log('GrapesJS ready');
 
-        window.addEventListener('message', (event) => {
-                const msg = event.data;
-                if (msg?.type !== 'doc:update') return;
+        function markDirty(reason: string) {
+                log(`{markDiry ${reason}`);
+                // Si on est dans un champ texte, on ne commit pas tout de suite
+                if (inTextEdit) {
+                        pendingDirty = true;
+                        // Optionnel: log minimal
+                        // console.log('dirty deferred:', reason);
+                        return;
+                }
+                scheduleExport(reason);
+        }
 
-                editor.setComponents(msg.html || '');
-                editor.setStyle(msg.css || '');
+        editor.on('rte:enable', () => {
+                inTextEdit = true;
+                pendingDirty = false; // on repart propre au début d'une session RTE
+        });
 
-                console.log('[editorBoot] document loaded');
+        editor.on('rte:disable', () => {
+                inTextEdit = false;
+                // Commit final seulement si quelque chose a changé pendant RTE
+                if (pendingDirty) {
+                        pendingDirty = false;
+                        scheduleExport('rte:disable commit');
+                }
+        });
+
+        // Structure: on exporte tout de suite (ça vous marche déjà bien)
+        /*
+        editor.on('component:add component:remove style:property:update', () => {
+                markDirty('structure/style');
+        });
+	*/
+
+        // Updates: si ça vient d'un edit texte, on diffère; sinon on exporte
+        editor.on('component:update', () => {
+                markDirty('component:update');
         });
 
         // Change hooks (keep it simple first)
         editor.on('component:add component:remove component:update style:property:update', () => {
-                scheduleExport('gjs:change');
+                // LOOP !!!!!!!!!!!!!!!!!!
+                // !!!!!!!!!!!!!!!!!!!!!!markDirty('gjs:change'); // !!!
         });
 
         // ---- RTE hooks (commit point) ----
@@ -192,319 +238,221 @@ function grapesJSEditor(grapesJs: GrapesJsApi) {
                 }
         });
 
-        // ---- Change hooks ----
-        editor.on('component:add component:remove style:property:update', () => {
-                scheduleExport('gjs:structure/style');
+        window.addEventListener('message', (event) => {
+                const msg = event.data;
+                log(`${msg.type} <- VSCode`);
+                switch (msg.type) {
+                        case 'vsc:ready':
+                                log('vsc:ready <- VSCode');
+                                log('bootEditor:ready -> VSCode');
+                                vscode?.postMessage({ type: 'bootEditor:ready' });
+                                break;
+
+                        case 'doc:update':
+                                log('doc:update <- VSCode');
+                                loadDocument(editor, msg.html ?? '', msg.css);
+                                break;
+                }
         });
 
-        // This one fires a lot; keep it, but it will be deferred during RTE
-        editor.on('component:update', () => {
-                scheduleExport('gjs:component:update');
+        log('bootEditor:loaded -> VSCode');
+        vscode?.postMessage({ type: 'bootEditor:loaded' });
+
+        // Give the new document to GrapeJS
+        function loadDocument(editor: any, html: string, css: string) {
+                log('Document changed will be processed by bootEditor');
+
+                //if (html === lastHtml && css === lastCss) return;
+
+                isApplyingFromVscode = true;
+                //lastHtml = html;
+                //lastCss = css;
+
+                editor.DomComponents.clear();
+                editor.CssComposer.clear();
+
+                // Give the new document to GrapesJS.
+
+                editor.setComponents(html);
+                editor.setStyle(css);
+                applyDelphineBodyTraits();
+                // Release AFTER GrapesJS processed update
+                requestAnimationFrame(() => {
+                        log('Document changed has been processed by bootEditor');
+                        isApplyingFromVscode = false;
+                });
+        }
+
+        function getBodyComponent(editor: GrapesJS.Editor) {
+                const wrapper = editor.getWrapper();
+                if (!wrapper) return;
+
+                // In most cases, the <body> is the first component inside the wrapper
+                const first = wrapper.components().at(0);
+                //console.log('FIRST', first!.get('tagName'));
+                if (first && (first.get('tagName') || '').toLowerCase() === 'body') return first;
+
+                // Fallback: search by tagName
+                const found = wrapper.find!('[data-gjs-type]'); // any selector, we just want to traverse
+                //console.log('Found : ', found);
+                // Better: recursive search
+                let body = null;
+                wrapper.findType && (body = wrapper.findType('body')?.[0]);
+                //console.log('XXX', body);
+                if (body) return body;
+
+                // Another fallback: manual deep walk
+                const walk = (cmp: GrapesJS.Component): GrapesJS.Component | null => {
+                        if (!cmp) return null;
+                        //console.log('Walk:', cmp.get('tagName'));
+                        if ((cmp.get('tagName') || '').toLowerCase() === 'body') {
+                                //console. ('!!!FOUND!!!');
+                                return cmp;
+                        }
+                        for (const child of cmp.components().models) {
+                                const res = walk(child);
+                                if (res) return res;
+                        }
+                        return null;
+                };
+                return walk(wrapper);
+        }
+
+        function applyDelphineBodyTraits() {
+                const wrapper = editor.getWrapper();
+                if (!wrapper) return;
+                //console.log('Wrapper tag:', wrapper.get('tagName'));
+                //console.log('Wrapper children:', wrapper.components().length);
+                //for (let i = 0; i < wrapper.components().length; i++) {
+                //console.log('Child tag:', i, asyncWrapProviders.components().at(i)?.get('tagName'));
+                //}
+                const bodyCmp = getBodyComponent(editor);
+                if (!bodyCmp) {
+                        log('No BODY component found');
+                        return;
+                }
+                // IMPORTANT: defaults.traits ne se “rejouent” pas automatiquement après un set(type)
+                const delphBodyType = editor.DomComponents.getType('delphine-body');
+                const delphTraits = delphBodyType?.model?.prototype?.defaults?.traits ?? delphBodyType?.model?.defaults?.traits;
+
+                if (delphTraits) {
+                        bodyCmp.set('traits', delphTraits);
+                }
+
+                bodyCmp.addAttributes({ 'data-component': 'TForm' });
+
+                // debug
+                //console.log('BODY type now:', bodyCmp.get('type'));
+                //console.log('BODY traits now:', bodyCmp.get('traits'));
+        }
+
+        /***************************************************************** L'ancien code ************************************************************************ */
+
+        editor.BlockManager.add('testBlock', {
+                label: 'Block',
+                attributes: { class: 'gjs-fonts gjs-f-b1' },
+                content: `<div style="padding-top:50px; padding-bottom:50px; text-align:center">Test block</div>`
         });
-        /*
 
-			editor.BlockManager.add('testBlock', 
-			{
-				label: 'Block',
-				attributes: { class: 'gjs-fonts gjs-f-b1' },
-				content: \`<div style="padding-top:50px; padding-bottom:50px; text-align:center">Test block</div>\`,
-			});
+        editor.BlockManager.add('my-heading', {
+                label: 'Titre',
+                category: 'Basic',
+                content: '<h1>Mon titre</h1>'
+        });
 
-			editor.BlockManager.add('my-heading', 
-			{
-				label: 'Titre',
-				category: 'Basic',
-				content: '<h1>Mon titre</h1>',
-			});
+        editor.Components.addType('my-button', {
+                isComponent: (el: Element) => {
+                        // el est un HTMLElement quand Grapes parse du DOM/HTML
+                        if (el.tagName === 'BUTTON' && el.hasAttribute('data-onclick')) {
+                                return { type: 'my-button' };
+                        }
+                        return false;
+                },
 
+                model: {
+                        defaults: {
+                                tagName: 'button',
+                                content: 'Clique-moi',
+                                attributes: {
+                                        'data-component': 'my-button',
+                                        'data-name': 'Button1',
+                                        'data-onclick': '',
+                                        'data-color': 'default'
+                                },
+                                traits: [
+                                        { type: 'text', name: 'data-name', label: 'Name' },
+                                        { type: 'text', name: 'data-onclick', label: 'onclick' },
+                                        {
+                                                type: 'select',
+                                                name: 'data-color',
+                                                label: 'Color',
+                                                options: [
+                                                        { id: 'default', name: 'Default' },
+                                                        { id: 'primary', name: 'Primary' },
+                                                        { id: 'warning', name: 'Warning' }
+                                                ]
+                                        }
+                                ]
+                        }
+                }
+        });
 
+        editor.DomComponents.addType('text', {
+                model: {
+                        defaults: {
+                                traits: [
+                                        {
+                                                type: 'text',
+                                                label: 'OnClick',
+                                                name: 'data-onclick',
+                                                placeholder: 'handleClick'
+                                        },
+                                        { type: 'text', name: 'data-name', label: 'Name' },
+                                        {
+                                                type: 'select',
+                                                name: 'data-color',
+                                                label: 'Color',
+                                                options: [
+                                                        { id: 'default', name: 'Default' },
+                                                        { id: 'primary', name: 'Primary' },
+                                                        { id: 'warning', name: 'Warning' }
+                                                ]
+                                        }
+                                ]
+                        }
+                }
+        });
 
-			editor.Components.addType('my-button', 
-			{
-				isComponent: (el) => 
-				{
-					// el est un HTMLElement quand Grapes parse du DOM/HTML
-					if (el.tagName === 'BUTTON' && el.hasAttribute('data-onclick')) 
-					{
-						return { type: 'my-button' };
-					}
-					return false;
-				},
+        editor.BlockManager.add('my-button-block', {
+                label: 'Bouton',
+                category: 'My Components',
+                content: {
+                        type: 'my-button'
+                }
+        });
 
-
-				model: 
-				{
-					defaults: 
-					{
-						tagName: 'button',
-						content: 'Clique-moi',
-						attributes: 
-						{
-							'data-component': 'my-button',
-							'data-name': 'Button1',
-							'data-onclick': '',
-							'data-color': 'default',
-						},
-						traits: 
-						[
-							{ type: 'text', name: 'data-name', label: 'Name' },
-							{ type: 'text', name: 'data-onclick', label: 'onclick' },
-							{ type: 'select', name: 'data-color', label: 'Color', options: 
-								[
-									{ id: 'default', name: 'Default' },
-									{ id: 'primary', name: 'Primary' },
-									{ id: 'warning', name: 'Warning' },
-								]
-							},
-						],
-					},
-				},
-			});
-
-			editor.DomComponents.addType('text', 
-			{
-				model: 
-				{
-					defaults: 
-					{
-						traits: 
-						[
-							{
-								type: 'text',
-								label: 'OnClick',
-								name: 'data-onclick',
-								placeholder: 'handleClick',
-							},
-							{ type: 'text', name: 'data-name', label: 'Name' },
-							{
-								type: 'select', name: 'data-color', label: 'Color', options: 
-								[
-									{ id: 'default', name: 'Default' },
-									{ id: 'primary', name: 'Primary' },
-									{ id: 'warning', name: 'Warning' },
-								]
-							},
-
-						],
-					},
-				},
-			});
-
-			editor.BlockManager.add('my-button-block', 
-			{
-				label: 'Bouton',
-				category: 'My Components',
-				content: 
-				{
-					type: 'my-button',
-				},
-			});
-
-			editor.DomComponents.addType('delphine-body', 
-			{
-				extend: 'body',
-				model: 
-				{
-					defaults: 
-					{
-						traits: 
-						[
-							{ type: 'text', label: 'OnCreate', name: 'data-oncreate', placeholder: 'FormCreate' },
-							{ type: 'text', name: 'data-name', label: 'Name' },
-							{ type: 'text', name: 'data-onclick', label: 'OnClick' },
-							{
-							type: 'select', name: 'data-color', label: 'Color',
-							options: [
-							{ id: 'default', name: 'Default' },
-							{ id: 'primary', name: 'Primary' },
-							{ id: 'warning', name: 'Warning' },
-							],
-							},
-						],
-					},
-				},
-			});
-
-			function getBodyComponent(editor) 
-			{
-				const wrapper = editor.getWrapper();
-
-				// In most cases, the <body> is the first component inside the wrapper
-				const first = wrapper.components().at(0);
-				console.log('FIRST', first.get('tagName'));
-				if (first && (first.get('tagName') || '').toLowerCase() === 'body') return first;
-
-				// Fallback: search by tagName
-				const found = wrapper.find('[data-gjs-type]') // any selector, we just want to traverse
-				console.log('Found : ', found);
-				// Better: recursive search
-				let body = null;
-				wrapper.findType && (body = wrapper.findType('body')?.[0]);
-				console.log('XXX', body);
-				if (body) return body;
-
-				// Another fallback: manual deep walk
-				const walk = (cmp) => 
-				{
-					console.log('Walk:', cmp.get('tagName'));
-					if ((cmp.get('tagName') || '').toLowerCase() === 'body') 
-					{
-						console.log('!!!FOUND!!!');
-						return cmp;
-					}
-					for (const child of cmp.components().models) 
-					{
-						const res = walk(child);
-						if (res) return res;
-					}
-					return null;
-				};
-				return walk(wrapper);
-			}
-
-
-			function applyDelphineBodyTraits() 
-			{
-				const wrapper = editor.getWrapper();
-				console.log('Wrapper tag:', editor.getWrapper().get('tagName'));
-				console.log('Wrapper children:', editor.getWrapper().components().length);
-				for (let i = 0; i < editor.getWrapper().components().length; i++) 
-				{
-					console.log('Child tag:', i, editor.getWrapper().components().at(i)?.get('tagName'));
-				}
-				const bodyCmp = getBodyComponent(editor);
-				if (!bodyCmp) {
-					console.log('No BODY component found');
-					return;
-				}
-				// IMPORTANT: defaults.traits ne se “rejouent” pas automatiquement après un set(type)
-				const delphBodyType = editor.DomComponents.getType('delphine-body');
-				const delphTraits = delphBodyType?.model?.prototype?.defaults?.traits
-						?? delphBodyType?.model?.defaults?.traits;
-
-				if (delphTraits) 
-				{
-				bodyCmp.set('traits', delphTraits);
-				}
-
-				bodyCmp.addAttributes({ 'data-component': 'TForm' });
-
-				// debug
-				console.log('BODY type now:', bodyCmp.get('type'));
-  				console.log('BODY traits now:', bodyCmp.get('traits'));
-			}
-
-			
-
-			let lastText = null;
-			let lastCss = null;
-
-			function loadDocument({ html, css }) 
-			{
-				if (html === lastText && css === lastCss) return;
-
-				isApplyingFromVscode = true;
-				lastText = html;
-				lastCss = css;
-
-				editor.DomComponents.clear();
-				editor.CssComposer.clear();
-
-				editor.setComponents(html);
-				editor.setStyle(css);
-				applyDelphineBodyTraits();
-				// Release AFTER GrapesJS processed update
-				requestAnimationFrame(() => 
-				{
-					isApplyingFromVscode = false;
-				});
-			}
-			
-		
-			window.addEventListener('message', (event) => 
-			{
-				const msg = event.data;
-				if (msg?.type === 'update') {
-				loadDocument({ html: msg.html ?? '', css: msg.css ?? '' });
-				}
-			});
-
-			let pendingExport = false;
-			let rev = 0;
-			let lastExportHtml = '';
-			let lastExportCss = '';
-
-			function scheduleExport(reason) 
-			{
-				if (isApplyingFromVscode) return;
-				if (pendingExport) return;
-				pendingExport = true;
-
-				requestAnimationFrame(() => 
-				{
-					pendingExport = false;
-					if (isApplyingFromVscode) return;
-
-					const wrapper = editor.getWrapper();
-					const html = wrapper ? wrapper.toHTML() : editor.getHtml();
-					const css = editor.getCss();
-
-					// ✅ IMPORTANT : si focus/sélection n'a rien changé -> ne rien envoyer
-					if (html === lastExportHtml && css === lastExportCss) return;
-
-					lastExportHtml = html;
-					lastExportCss = css;
-
-					vscode.postMessage({ type: 'contentChanged', html, css, rev: ++rev, reason });
-				});
-			}
-
-
-			let inTextEdit = false;
-			let pendingDirty = false;
-
-			function markDirty(reason) 
-			{
-				// Si on est dans un champ texte, on ne commit pas tout de suite
-				if (inTextEdit) {
-					pendingDirty = true;
-					// Optionnel: log minimal
-					// console.log('dirty deferred:', reason);
-					return;
-				}
-				scheduleExport(reason);
-			}
-
-			editor.on('rte:enable', () => 
-			{
-				inTextEdit = true;
-				pendingDirty = false; // on repart propre au début d'une session RTE
-			});
-
-			editor.on('rte:disable', () => 
-			{
-				inTextEdit = false;
-				// Commit final seulement si quelque chose a changé pendant RTE
-				if (pendingDirty) {
-					pendingDirty = false;
-					scheduleExport('rte:disable commit');
-				}
-			});
-
-			// Structure: on exporte tout de suite (ça vous marche déjà bien)
-			editor.on('component:add component:remove style:property:update', () => 
-			{
-				markDirty('structure/style');
-			});
-
-			// Updates: si ça vient d'un edit texte, on diffère; sinon on exporte
-			editor.on('component:update', () => 
-			{
-				markDirty('component:update');
-			});
-		</script>
-	*/
-        return editor;
+        editor.DomComponents.addType('delphine-body', {
+                extend: 'body',
+                model: {
+                        defaults: {
+                                traits: [
+                                        { type: 'text', label: 'OnCreate', name: 'data-oncreate', placeholder: 'FormCreate' },
+                                        { type: 'text', name: 'data-name', label: 'Name' },
+                                        { type: 'text', name: 'data-onclick', label: 'OnClick' },
+                                        {
+                                                type: 'select',
+                                                name: 'data-color',
+                                                label: 'Color',
+                                                options: [
+                                                        { id: 'default', name: 'Default' },
+                                                        { id: 'primary', name: 'Primary' },
+                                                        { id: 'warning', name: 'Warning' }
+                                                ]
+                                        }
+                                ]
+                        }
+                }
+        });
 }
 
 // boot.ts (compiled to boot.js)
@@ -536,13 +484,12 @@ async function main() {
 
         try {
                 const grapes = await waitForGrapesJs();
-                console.log('grapes', grapes);
+                //console.log('grapes', grapes);
                 const editor = grapesJSEditor(grapes);
-                console.log('[editorBoot] Grapes ready', editor);
+                log('Grapes ready');
                 //const vscode = getVsCodeApi();
-                vscode?.postMessage?.({ type: 'boot:loaded' });
                 // vscode.postMessage(...)
-                postToVsCode({ type: 'bootEditor:loaded' });
+                //postToVsCode({ type: 'bootEditor:loaded' });
         } catch (e) {
                 console.error('[editorBoot] FAIL', e);
                 //vscode?.postMessage?.({ type: 'boot:error', message: String((e as any)?.message ?? e) });
