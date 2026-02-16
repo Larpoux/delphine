@@ -14,7 +14,7 @@ This is a cleaned-up skeleton based on your current codebase.
 
 - **Preview panel** (reliable): command `Delphine: Open Preview Panel`
 - **Custom editor** (optional): viewType `delphine.previewEditor` with `priority: option`
-  - Use *Open With…* on an `.html` file to choose it.
+     - Use _Open With…_ on an `.html` file to choose it.
 
 ## Files / structure
 
@@ -30,8 +30,7 @@ The preview HTML expects these files in your extension folder:
 - `media/boot.js`
 - `media/zaza.compiled.js`
 
-If you want to load scripts from somewhere else (workspace folder, generated output, etc.),
-change the URIs in `src/preview/html.ts`.
+If you want to load scripts from somewhere else (workspace folder, generated output, etc.), change the URIs in `src/preview/html.ts`.
 
 ## Build
 

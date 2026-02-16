@@ -16,12 +16,12 @@ class Zaza extends TForm {
         //import { installDelphineRuntime } from "./drt";
 
         /*
-const runtime = {
+const runtime = {   
   handleClick({ element }: { element: Element }) {
     console.log("clicked!", element);
     //(element as HTMLElement).style.backgroundColor = "red";
   },
-};
+}; 
 */
 
         button1_onclick() {

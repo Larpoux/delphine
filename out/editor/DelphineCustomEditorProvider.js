@@ -180,10 +180,6 @@ class DelphineCustomEditorProvider {
                     return;
             }
         });
-        console.log('[VSCODE] vsc:ready -> bootEditor');
-        void webviewPanel.webview.postMessage({
-            type: 'vsc:ready'
-        });
         this._extensionUri = DelphineCustomEditorProvider._context.extensionUri;
         webviewPanel.webview.options = {
             enableScripts: true,
@@ -203,6 +199,31 @@ class DelphineCustomEditorProvider {
                 css: cssText ?? ''
             });
         };
+        // Update the webview when the document changes.
+        const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
+            if (e.document.uri.toString() === document.uri.toString()) {
+                updateWebview();
+            }
+        });
+        webviewPanel.onDidDispose(() => changeSubscription.dispose());
+        // Receive messages from the webview.
+        /*
+        webviewPanel.webview.onDidReceiveMessage((msg) => {
+                if (!msg || typeof msg.type !== 'string') return;
+
+                // Example: the webview wants to replace the whole document.
+                if (msg.type === 'doc:replace' && typeof msg.text === 'string') {
+                        this.replaceDocument(document, msg.text);
+                }
+        });
+        */
+        // Initial content.
+        // updateWebview(); // Not necessary
+        console.log('[VSCODE] vsc:ready -> bootEditor');
+        void webviewPanel.webview.postMessage({
+            type: 'vsc:ready'
+        });
+        // ******************************************************************* Functions *********************************************
         // Keep it small and deterministic
         async function formatHtml(html) {
             try {
@@ -227,26 +248,6 @@ class DelphineCustomEditorProvider {
                 return html;
             }
         }
-        // Update the webview when the document changes.
-        const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
-            if (e.document.uri.toString() === document.uri.toString()) {
-                updateWebview();
-            }
-        });
-        webviewPanel.onDidDispose(() => changeSubscription.dispose());
-        // Receive messages from the webview.
-        /*
-        webviewPanel.webview.onDidReceiveMessage((msg) => {
-                if (!msg || typeof msg.type !== 'string') return;
-
-                // Example: the webview wants to replace the whole document.
-                if (msg.type === 'doc:replace' && typeof msg.text === 'string') {
-                        this.replaceDocument(document, msg.text);
-                }
-        });
-        */
-        // Initial content.
-        // updateWebview(); // Not necessary
     }
     buildHtml(webview, document) {
         const nonce = crypto.randomBytes(16).toString('base64url');

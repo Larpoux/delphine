@@ -35,9 +35,13 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PreviewPanel = void 0;
 exports.splitHtmlForGrapes = splitHtmlForGrapes;
-const vscode = __importStar(require("vscode"));
+exports.watchFileNoWorkspace = watchFileNoWorkspace;
 const crypto = __importStar(require("crypto"));
-// ***************************  THIS CODE IS SHARED WITH TE CUSTOM EDITOR *******************************
+const vscode = __importStar(require("vscode"));
+const fs = __importStar(require("node:fs"));
+const path = __importStar(require("node:path"));
+// ***************************  The following code is a duplicate from the Custom Editor *******************************
+// **************************** We should use a shared code. TODO ******************************************************
 const parse5_1 = require("parse5");
 // --- Small helpers ---
 function isElement(n, tag) {
@@ -108,17 +112,18 @@ class PreviewPanel {
     //private static current?: PreviewPanel;
     panel;
     context;
+    docUri = null;
+    compiledUri = null;
     disposed = false;
     timers = [];
     //private gotBoot = false;
     //private gotClick = false;
     runId = 0;
+    // English comments: example integration
+    compiledWatcher;
     constructor(context, panel) {
         this.context = context;
         this.panel = panel;
-        this.panel.onDidDispose(() => this.dispose(), null, context.subscriptions);
-        // One handler, once.
-        this.panel.webview.onDidReceiveMessage((msg) => this.onMessage(msg), null, context.subscriptions);
         /*
         // If the webview becomes visible again, ask it to re-focus itself.
         this.panel.onDidChangeViewState(
@@ -137,6 +142,7 @@ class PreviewPanel {
         );
         */
     }
+    // createOrShow() is a factory
     static async createOrShow(context, docUri) {
         // Dispose previous preview (fresh panel per run).
         //PreviewPanel.current?.dispose();
@@ -146,26 +152,59 @@ class PreviewPanel {
             // Restrict file access to the extension's media folder.
             localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')]
         });
-        const instance = new PreviewPanel(context, panel);
+        // The object constructor
+        const instance = await new PreviewPanel(context, panel);
         //PreviewPanel.current = instance;
-        instance.runId++;
-        //instance.gotBoot = false;
-        //instance.gotClick = false;
-        panel.webview.html = instance.buildHtml(panel.webview, docUri);
-        // One gentle activation attempt (no retries storm).
-        instance.safeReveal(0);
-        instance.safeReveal(80);
+        instance.docUri = docUri;
+        instance.init(context, panel);
+        return instance;
         // Optional: a short watchdog to log OK/KO.
         //instance.startWatchdog(3000);
     }
-    buildHtml(webview, _docUri) {
+    docChangeTimer;
+    init(context, panel) {
+        this.runId++;
+        //instance.gotBoot = false;
+        //instance.gotClick = false;
+        const docName = this.getStem(this.docUri);
+        this.compiledUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', `${docName}.compiled.js`));
+        panel.onDidDispose(() => this.dispose(), null, context.subscriptions);
+        // One handler, once.
+        panel.webview.onDidReceiveMessage((msg) => this.onMessage(msg), null, context.subscriptions);
+        vscode.workspace.onDidChangeTextDocument((ev) => {
+            const doc = ev.document;
+            console.log('onDidChangeTextDocument');
+            //if (doc.uri.toString() !== this.docUri!.toString()) return;
+            // Only refresh if it's the document this panel shows
+            // Debounce
+            if (this.docChangeTimer)
+                clearTimeout(this.docChangeTimer);
+            this.docChangeTimer = setTimeout(() => {
+                this.docChangeTimer = undefined;
+                this.onDocChanged(doc);
+            }, 300);
+        });
+        this.startWatchingCompiledJs(this.compiledUri);
+        panel.webview.html = this.buildHtml(panel.webview);
+        // One gentle activation attempt (no retries storm).
+        this.safeReveal(0);
+        this.safeReveal(80);
+    }
+    buildHtml(webview) {
         const editor = vscode.window.activeTextEditor;
         if (!editor)
             return '';
         const nonce = crypto.randomBytes(16).toString('base64url');
         const bootUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'bootPreview.js'));
-        const compiledUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'zaza.compiled.js'));
-        const { bodyInnerHtml, cssText } = splitHtmlForGrapes(editor.document.getText());
+        if (!fs.existsSync(bootUri.fsPath)) {
+            console.warn('bootPreview.js not found:', bootUri.fsPath);
+            // fallback, message, placeholder, etc.
+        }
+        if (!fs.existsSync(this.compiledUri.fsPath)) {
+            console.warn('Compiled JS not found:', this.compiledUri.fsPath);
+            // fallback, message, placeholder, etc.
+        }
+        const { bodyInnerHtml, bodyAttrs, cssText } = splitHtmlForGrapes(editor.document.getText());
         console.log('---------------------------bodyInnerHtml---------------------------');
         console.log(bodyInnerHtml);
         console.log('--------------------------------------------------------------');
@@ -185,19 +224,56 @@ class PreviewPanel {
             `script-src-elem 'nonce-${nonce}' ${webview.cspSource}`
         ].join('; ');
         return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta http-equiv="Content-Security-Policy" content="${csp}">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Delphine Preview</title>
-</head>
-<body id="delphine-root" data-component="TForm" data-name="zaza" data-onclick="zaza_onclick">
-  ${bodyInnerHtml}
-  <script nonce="${nonce}" type="module" src="${bootUri}"></script>
-  <script nonce="${nonce}" type="module" src="${compiledUri}"></script>
-</body>
-</html>`;
+                        <html>
+                        <head>
+                        <meta charset="utf-8" />
+                        <meta http-equiv="Content-Security-Policy" content="${csp}">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                        <title>Delphine Preview</title>
+                        </head>
+                        <body ${bodyAttrs}>
+                        ${bodyInnerHtml}
+                        <script nonce="${nonce}" type="module" src="${bootUri}"></script>
+                        <script nonce="${nonce}" type="module" src="${this.compiledUri}"></script>
+                        </body>
+                        </html>
+                `;
+    }
+    getStem(uri) {
+        const basename = uri.path.split('/').pop() ?? 'document.html';
+        const stem = basename.replace(/\.[^.]+$/, ''); // "zaza.html" -> "zaza"
+        return stem;
+    }
+    // Actually not used. Just for future if needed
+    getCompiledJsUriSav(webview, doc) {
+        const htmlUri = doc.uri;
+        // Change extension: zaza.html → zaza.compiled.js
+        const compiledUri = htmlUri.with({
+            path: htmlUri.path.replace(/\.html$/i, '.compiled.js')
+        });
+        return webview.asWebviewUri(compiledUri);
+    }
+    // Actually not used. Just for future if needed
+    getCompiledJsUriWithSuffix(uri, fromExt, suffix) {
+        return uri.with({
+            path: uri.path.replace(new RegExp(`${fromExt}$`, 'i'), `${suffix}`)
+        });
+    }
+    refresh() {
+        this.panel.webview.html = this.buildHtml(this.panel.webview);
+    }
+    onDocChanged(doc) {
+        const x = this.getCompiledJsUriWithSuffix(this.docUri, '.html', '.ts');
+        // Case 1 : le HTML itself changed
+        if (doc.uri === this.docUri) {
+            this.refresh();
+            return;
+        }
+        // Case 2 : The compiled URI
+        //if (doc.uri === this.compiledUri) {
+        //        this.refresh();
+        //        return;
+        //}
     }
     onMessage(msg) {
         if (!msg || typeof msg.type !== 'string')
@@ -250,6 +326,58 @@ class PreviewPanel {
         }
         //if (PreviewPanel.current === this) PreviewPanel.current = undefined;
     }
+    startWatchingCompiledJs(compiledUri) {
+        //const stem = path.basename(htmlUri.fsPath, path.extname(htmlUri.fsPath));
+        // Where is the compiled JS?
+        // Today: extension/media/<stem>.compiled.js
+        //const compiledAbs = vscode.Uri.joinPath(this.context.extensionUri, 'media', `${stem}.compiled.js`).fsPath;
+        this.compiledWatcher?.dispose();
+        this.compiledWatcher = watchFileNoWorkspace(compiledUri.fsPath, () => {
+            // Rebuild webview HTML so the <script src="...compiled.js"> is reloaded
+            this.refresh();
+        });
+        this.panel.onDidDispose(() => this.compiledWatcher?.dispose());
+    }
 }
 exports.PreviewPanel = PreviewPanel;
+function debounce(fn, ms) {
+    let t;
+    return () => {
+        if (t)
+            clearTimeout(t);
+        t = setTimeout(() => {
+            t = undefined;
+            fn();
+        }, ms);
+    };
+}
+/**
+ * Watch a target file path even when no workspace is open.
+ * We watch the directory and filter by filename to survive atomic writes (rename).
+ */
+function watchFileNoWorkspace(targetFileAbsPath, onChanged) {
+    //const dir = path.dirname(targetFileAbsPath);
+    //const base = path.basename(targetFileAbsPath);
+    const fire = debounce(onChanged, 150);
+    const dir = path.dirname(targetFileAbsPath);
+    const target = path.basename(targetFileAbsPath);
+    // Note: fs.watch can be flaky on some network shares; directory watching is usually better than file watching.
+    const watcher = fs.watch(dir, { persistent: false }, (_evt, filename) => {
+        // filename can be null on some platforms
+        if (!filename)
+            return;
+        // On macOS/Linux, filename is usually just the base name
+        if (filename.toString() === target) {
+            fire();
+        }
+    });
+    return {
+        dispose() {
+            try {
+                watcher.close();
+            }
+            catch { }
+        }
+    };
+}
 //# sourceMappingURL=PreviewPanel.js.map
