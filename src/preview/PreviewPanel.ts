@@ -119,6 +119,7 @@ export class PreviewPanel {
         compiledUri: vscode.Uri | null = null;
         disposed = false;
         timers: NodeJS.Timeout[] = [];
+        document: vscode.TextDocument | null = null;
 
         //private gotBoot = false;
         //private gotClick = false;
@@ -167,6 +168,8 @@ export class PreviewPanel {
                 //PreviewPanel.current = instance;
                 instance.docUri = docUri;
 
+                const editor = vscode.window.activeTextEditor;
+                if (editor) instance.document = editor?.document;
                 instance.init(context, panel);
                 return instance;
 
@@ -206,16 +209,18 @@ export class PreviewPanel {
 
                 this.startWatchingCompiledJs(this.compiledUri);
 
-                panel.webview.html = this.buildHtml(panel.webview);
+                const html = this.buildHtml(panel.webview);
+                if (!html) return;
+                panel.webview.html = html;
 
                 // One gentle activation attempt (no retries storm).
                 this.safeReveal(0);
                 this.safeReveal(80);
         }
 
-        private buildHtml(webview: vscode.Webview): string {
-                const editor = vscode.window.activeTextEditor;
-                if (!editor) return '';
+        private buildHtml(webview: vscode.Webview): string | null {
+                //const editor = vscode.window.activeTextEditor;
+                if (!this.document) return null;
 
                 const nonce = crypto.randomBytes(16).toString('base64url');
 
@@ -230,7 +235,8 @@ export class PreviewPanel {
                         // fallback, message, placeholder, etc.
                 }
 
-                const { bodyInnerHtml, bodyAttrs, cssText } = splitHtmlForGrapes(editor.document.getText());
+                //const doc = this.document;
+                const { bodyInnerHtml, bodyAttrs, cssText } = splitHtmlForGrapes(this.document!.getText());
                 console.log('---------------------------bodyInnerHtml---------------------------');
                 console.log(bodyInnerHtml);
                 console.log('--------------------------------------------------------------');
@@ -294,7 +300,9 @@ export class PreviewPanel {
         }
 
         private refresh() {
-                this.panel.webview.html = this.buildHtml(this.panel.webview);
+                const html = this.buildHtml(this.panel.webview);
+                if (!html) return;
+                this.panel.webview.html = html;
         }
 
         private onDocChanged(doc: vscode.TextDocument) {

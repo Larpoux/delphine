@@ -116,6 +116,7 @@ class PreviewPanel {
     compiledUri = null;
     disposed = false;
     timers = [];
+    document = null;
     //private gotBoot = false;
     //private gotClick = false;
     runId = 0;
@@ -156,6 +157,9 @@ class PreviewPanel {
         const instance = await new PreviewPanel(context, panel);
         //PreviewPanel.current = instance;
         instance.docUri = docUri;
+        const editor = vscode.window.activeTextEditor;
+        if (editor)
+            instance.document = editor?.document;
         instance.init(context, panel);
         return instance;
         // Optional: a short watchdog to log OK/KO.
@@ -185,15 +189,18 @@ class PreviewPanel {
             }, 300);
         });
         this.startWatchingCompiledJs(this.compiledUri);
-        panel.webview.html = this.buildHtml(panel.webview);
+        const html = this.buildHtml(panel.webview);
+        if (!html)
+            return;
+        panel.webview.html = html;
         // One gentle activation attempt (no retries storm).
         this.safeReveal(0);
         this.safeReveal(80);
     }
     buildHtml(webview) {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor)
-            return '';
+        //const editor = vscode.window.activeTextEditor;
+        if (!this.document)
+            return null;
         const nonce = crypto.randomBytes(16).toString('base64url');
         const bootUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'bootPreview.js'));
         if (!fs.existsSync(bootUri.fsPath)) {
@@ -204,7 +211,8 @@ class PreviewPanel {
             console.warn('Compiled JS not found:', this.compiledUri.fsPath);
             // fallback, message, placeholder, etc.
         }
-        const { bodyInnerHtml, bodyAttrs, cssText } = splitHtmlForGrapes(editor.document.getText());
+        //const doc = this.document;
+        const { bodyInnerHtml, bodyAttrs, cssText } = splitHtmlForGrapes(this.document.getText());
         console.log('---------------------------bodyInnerHtml---------------------------');
         console.log(bodyInnerHtml);
         console.log('--------------------------------------------------------------');
@@ -260,7 +268,10 @@ class PreviewPanel {
         });
     }
     refresh() {
-        this.panel.webview.html = this.buildHtml(this.panel.webview);
+        const html = this.buildHtml(this.panel.webview);
+        if (!html)
+            return;
+        this.panel.webview.html = html;
     }
     onDocChanged(doc) {
         const x = this.getCompiledJsUriWithSuffix(this.docUri, '.html', '.ts');

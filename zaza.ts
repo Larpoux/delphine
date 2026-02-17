@@ -30,7 +30,7 @@ const runtime = {
                         console.warn('button1 not found in registry');
                         return;
                 }
-                btn.color = TColor.rgb(0, 255, 0);
+                btn.color = TColor.rgb(0, 0, 255);
                 this.componentRegistry.get('button1')!.color = TColor.rgb(255, 0, 0);
                 console.log('Button1 clicked!!!!');
         }
