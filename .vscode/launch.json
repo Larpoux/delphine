@@ -1,31 +1,28 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Run Extension",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}",
-        "--remote-debugging-port=9222"
-      ],
-      "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile"
-    },
-    {
-      "name": "Attach Webview (Chrome)",
-      "type": "pwa-chrome",
-      "request": "attach",
-      "port": 9222,
-      "webRoot": "${workspaceFolder}",
-      "sourceMaps": true
-    }
-  ],
-  "compounds": [
-    {
-      "name": "Run + Attach Webview",
-      "configurations": ["Run Extension", "Attach Webview (Chrome)"]
-    }
-  ]
+        "version": "0.2.0",
+        "configurations": [
+                {
+                        "name": "Run Extension",
+                        "type": "extensionHost",
+                        "request": "launch",
+                        "runtimeExecutable": "${execPath}",
+                        "args": ["--extensionDevelopmentPath=${workspaceFolder}", "--remote-debugging-port=9222"],
+                        "outFiles": ["${workspaceFolder}/out/**/*.js"],
+                        "preLaunchTask": "npm: compile"
+                },
+                {
+                        "name": "Attach Webview (Chrome)",
+                        "type": "chrome",
+                        "request": "attach",
+                        "port": 9222,
+                        "webRoot": "${workspaceFolder}",
+                        "sourceMaps": true
+                }
+        ],
+        "compounds": [
+                {
+                        "name": "Run + Attach Webview",
+                        "configurations": ["Run Extension", "Attach Webview (Chrome)"]
+                }
+        ]
 }

@@ -15,7 +15,7 @@
         "categories": [
                 "Other"
         ],
-        "main": "./out/extension.js",
+        "main": "./out/extension/extension.js",
         "activationEvents": [
                 "onCommand:delphine.preview",
                 "onCommand:delphine.openEditor",

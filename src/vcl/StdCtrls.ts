@@ -1,3 +1,27 @@
+import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
+// //import type { Json, DelphineServices, ComponentTypeRegistry } from '../drt/UIPlugin';
+
+export type ComponentFactory = (name: string, form: TForm, owner: TComponent) => TComponent;
+
+/*
+export class ComponentRegistry {
+        private factories = new Map<string, ComponentFactory>();
+
+        registerType(typeName: string, factory: ComponentFactory): void {
+                this.factories.set(typeName, factory);
+        }
+
+        has(typeName: string): boolean {
+                return this.factories.has(typeName);
+        }
+
+        create(typeName: string, name: string, form: TForm, owner: TComponent): TComponent | null {
+                const f = this.factories.get(typeName);
+                return f ? f(name, form, owner) : null;
+        }
+}
+        */
+
 export class TColor {
         s: string;
 
@@ -12,7 +36,7 @@ export class TColor {
         }
 }
 
-class ComponentRegistry {
+export class ComponentRegistry {
         private byName = new Map<string, TComponent>();
 
         register(name: string, c: TComponent) {
@@ -27,7 +51,7 @@ class ComponentRegistry {
                 this.byName.clear();
         }
 
-        private resolveRoot(): HTMLElement {
+        resolveRoot(): HTMLElement {
                 // Prefer body as the canonical root.
                 if (document.body?.dataset?.component) return document.body;
 
@@ -41,26 +65,17 @@ class ComponentRegistry {
 
         buildComponentTree(form: TForm) {
                 this.clear();
+                // resolveRoot est maintenant appelé par TForm::show(). Inutile de le faire ici
                 //const root = TDocument.body;
                 //const root = (document.getElementById('delphine-root') ?? document.body) as HTMLElement;
-                // English comments as requested.
-
                 //const root = (document.body?.matches('[data-component]') ? document.body : null) ?? (document.getElementById('delphine-root') as HTMLElement | null) ?? document.body;
-                const root = this.resolveRoot();
-
-                // 1️⃣ traiter la Form elle-même
-                if (root.matches('[data-component]')) {
-                        //this.registerForm(root);
-                        console.log('le root match');
-                }
+                //const root = this.resolveRoot();
 
                 // --- FORM ---
                 // provisoirement if (root.getAttribute('data-component') === 'TForm') {
-                form.elem = root;
                 this.register(form.name, form);
-                const toto = root.getAttribute('data-onclick');
-                console.log(`toto = ${toto}`);
                 //}
+                const root = form.elem!;
 
                 // --- CHILD COMPONENTS ---
                 root.querySelectorAll('[data-component]').forEach((el) => {
@@ -73,9 +88,17 @@ class ComponentRegistry {
 
                         let comp: TComponent | null = null;
 
+                        // The following switch is just for now. In the future it will not be necessary
                         switch (type) {
                                 case 'my-button':
                                         comp = new TButton(name!, form, form);
+                                        break;
+
+                                case 'delphine-plugin':
+                                        //comp = new PluginHost(name, form, form);
+                                        break;
+
+                                default:
                                         break;
                         }
 
@@ -98,7 +121,7 @@ export class TComponent {
                 return this.elem as HTMLElement | null;
         }
         name: string;
-        constructor(name: string, parent: TComponent | null, form: TForm | null) {
+        constructor(name: string, form: TForm | null, parent: TComponent | null) {
                 this.name = name;
                 this.parent = parent;
                 parent?.children.push(this);
@@ -170,6 +193,7 @@ export class TDocument {
 
 export class TForm extends TComponent {
         static forms = new Map<string, TForm>();
+        private _mounted = false;
         componentRegistry: ComponentRegistry = new ComponentRegistry();
         constructor(name: string) {
                 super(name, null, null);
@@ -200,6 +224,15 @@ export class TForm extends TComponent {
         }
 
         show() {
+                // Must be done before buildComponentTree() because `buildComponentTree()` does not do `resolveRoot()` itself.
+                if (!this.elem) {
+                        this.elem = this.componentRegistry.resolveRoot(); // ou this.resolveRoot()
+                }
+                if (!this._mounted) {
+                        this.componentRegistry.buildComponentTree(this);
+                        this._mounted = true;
+                }
+
                 // TODO
         }
 
@@ -281,13 +314,77 @@ export class TForm extends TComponent {
 }
 
 export class TButton extends TComponent {
-        constructor(name: string, parent: TComponent, form: TForm) {
-                super(name, parent, form);
+        constructor(name: string, form: TForm, parent: TComponent) {
+                super(name, form, parent);
         }
 }
 
 export class TApplication {
-        constructor() {
-                /* base class for the application */
+        private forms: TForm[] = [];
+        readonly types = new ComponentTypeRegistry();
+        mainForm: TForm | null = null;
+
+        createForm<T extends TForm>(ctor: new (...args: any[]) => T, name: string): T {
+                const f = new ctor(name);
+                this.forms.push(f);
+                if (!this.mainForm) this.mainForm = f;
+                return f;
+        }
+
+        run() {
+                this.runWhenDomReady(() => {
+                        if (this.mainForm) this.mainForm.show();
+                        else this.autoStart();
+                });
+        }
+
+        protected autoStart() {
+                // fallback: choisir une form enregistrée, ou créer une form implicite
+        }
+
+        runWhenDomReady(fn: () => void) {
+                if (document.readyState === 'loading') {
+                        window.addEventListener('DOMContentLoaded', fn, { once: true });
+                } else {
+                        fn();
+                }
         }
 }
+
+/*
+
+export class VueComponent extends TComponent {}
+
+export class ReactComponent extends TComponent {}
+
+export class SvelteComponent extends TComponent {}
+
+export class PluginHost<Props extends Json = Json> extends TComponent {
+        private plugin: Plugin<Props>;
+        private services: DelphineServices;
+        private mounted = false;
+
+        constructor(plugin: UIPlugin<Props>, services: DelphineServices) {
+                super('toto', null, null);
+                this.plugin = plugin;
+                this.services = services;
+        }
+
+        mount(props: Props) {
+                if (this.mounted) throw new Error('Plugin already mounted');
+                //this.plugin.mount(this.htmlElement, props, this.services);
+                this.mounted = true;
+        }
+
+        update(props: Props) {
+                if (!this.mounted) throw new Error('Plugin not mounted');
+                this.plugin.update(props);
+        }
+
+        unmount() {
+                if (!this.mounted) return;
+                this.plugin.unmount();
+                this.mounted = false;
+        }
+}
+        */

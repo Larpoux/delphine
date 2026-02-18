@@ -1,42 +1,29 @@
 #!/bin/bash
 set -euo pipefail
-
-# Always run from repo root (so paths are stable even if launched from VSCode)
 cd "$(dirname "$0")/.."
 
-# 1) Compile zaza
-npx esbuild zaza.ts \
+rm -rf out
+#npm run compile
+npx tsc -p src/extension/tsconfig.extension.json
+
+echo "***** zaza *****"
+npx esbuild examples/zaza/zaza.ts \
   --bundle \
   --format=esm \
   --platform=browser \
   --target=es2020 \
   --sourcemap=inline \
-  --outfile=zaza.compiled.js
-  rm media/zaza.compiled.js 2>/dev/null
-  mv -v zaza.compiled.js media/
+  --alias:@vcl=src/vcl \
+  --alias:@drt=src/drt \
+  --outfile=media/zaza.compiled.js
 
-# 2) Compile boot.ts -> media/boot.js (DOM-only TS, no Node types)
-rm -f media/bootEditor.js 2>/dev/null
-rm -f media/bootPreview.js 2>/dev/null
+echo "***** boots *****"
+npx tsc --project src/tsconfig.web.json
 
+#echo "***** bootPreview *****"
+#npx tsc --project src/tsconfig.web.json
 
-npx tsc media/bootEditor.ts \
-  --target ES2020 \
-  --module ES2020 \
-  --moduleResolution bundler \
-  --lib DOM,ES2020 \
-  --skipLibCheck \
-  --outDir media \
-  --noEmitOnError \
-  --strict
-
-
-npx tsc media/bootPreview.ts \
-  --target ES2020 \
-  --module ES2020 \
-  --moduleResolution bundler \
-  --lib DOM,ES2020 \
-  --skipLibCheck \
-  --outDir media \
-  --noEmitOnError \
-  --strict
+#npx tsc src/webview/bootPreview.ts \
+#  --project src/tsconfig.web.json \
+#  --outDir media \
+#  --noEmitOnError
