@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 //import { installDelphineRuntime } from "./src/drt"; // <-- TS, pas .js
-import { TForm, TColor, TApplication, TComponent } from '@vcl';
-import { ComponentTypeRegistry } from '@drt/UIPlugin';
+import { TForm, TColor, TApplication, TComponent, TButton } from '@vcl';
+import { ComponentTypeRegistry } from '@vcl/StdCtrls';
 //import { ComponentRegistry } from '@drt/ComponentRegistry';
 import { PluginHost } from '@drt/UIPlugin';
 
@@ -39,7 +39,7 @@ const runtime = {
 */
 
         button1_onclick() {
-                const btn = this.componentRegistry.get('button1');
+                const btn = this.componentRegistry.get<TButton>('button1');
                 if (!btn) {
                         console.warn('button1 not found in registry');
                         return;

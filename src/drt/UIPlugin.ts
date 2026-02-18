@@ -1,8 +1,8 @@
 // delphine-ui-plugin.ts
 // A framework-agnostic contract.
 // Delphine never talks to React/Vue/Svelte directly — only to this interface.
-
-import { TComponent, TForm } from '@vcl';
+import '@vcl';
+import { TComponent, TForm, ComponentFactory } from '@vcl';
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
@@ -64,29 +64,14 @@ export interface UIPluginInstance<Props extends Json = Json> {
         serializeState?(): Json;
 }
 
-export type ComponentFactory = (name: string, form: TForm, parent: TComponent) => TComponent;
-
-export class ComponentTypeRegistry {
-        private factories = new Map<string, ComponentFactory>();
-
-        registerType(typeName: string, factory: ComponentFactory) {
-                this.factories.set(typeName, factory);
-        }
-
-        create(name: string, form: TForm, parent: TComponent): TComponent | null {
-                const f = this.factories.get(name);
-                return f ? f(name, form, parent) : null;
-        }
-}
-
 // English comments as requested.
 export class PluginHost extends TComponent {
         private instance: UIPluginInstance | null = null;
 
         constructor(name: string, form: TForm, parent: TComponent) {
                 super(name, form, parent);
-                this.form = form;
-                this.parent = parent;
+                //this.form = form;
+                //this.parent = parent;
                 // you likely add this to parent's children elsewhere
         }
 

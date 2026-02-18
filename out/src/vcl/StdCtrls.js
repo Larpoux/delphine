@@ -1,7 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TApplication = exports.TButton = exports.TForm = exports.TDocument = exports.TComponent = exports.ComponentRegistry = exports.TColor = void 0;
-const UIPlugin_1 = require("../drt/UIPlugin"); // PAS "import type"
+exports.TApplication = exports.ComponentTypeRegistry = exports.TButton = exports.TForm = exports.TDocument = exports.TComponent = exports.ComponentRegistry = exports.TColor = void 0;
+//import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
+// //import type { Json, DelphineServices, ComponentTypeRegistry } from '../drt/UIPlugin';
+const registerVcl_1 = require("./registerVcl");
 /*
 export class ComponentRegistry {
         private factories = new Map<string, ComponentFactory>();
@@ -75,18 +77,26 @@ class ComponentRegistry {
             const type = el.getAttribute('data-component');
             const titi = el.getAttribute('data-onclick');
             console.log(`titi = ${titi}`);
-            let comp = null;
+            //let comp: TComponent | null = null;
             // The following switch is just for now. In the future it will not be necessary
+            /*
             switch (type) {
-                case 'my-button':
-                    comp = new TButton(name, form, form);
-                    break;
-                case 'delphine-plugin':
-                    //comp = new PluginHost(name, form, form);
-                    break;
-                default:
-                    break;
-            }
+                    case 'my-button':
+                            comp = new TButton(name!, form, form);
+                            break;
+
+                    case 'delphine-plugin':
+                            //comp = new PluginHost(name, form, form);
+                            break;
+
+                    default:
+                            break;
+            }*/
+            //const application: TApplication = new TApplication();
+            const factory = TApplication.TheApplication.types.get(type);
+            let comp = null;
+            if (factory)
+                comp = factory(name, form, form);
             if (comp) {
                 comp.elem = el;
                 this.register(name, comp);
@@ -269,10 +279,30 @@ class TButton extends TComponent {
     }
 }
 exports.TButton = TButton;
+//export type ComponentFactory = (name: string, form: TForm, parent: TComponent) => TComponent;
+class ComponentTypeRegistry {
+    factories = new Map();
+    get(name) {
+        return this.factories.get(name);
+    }
+    registerType(typeName, factory) {
+        this.factories.set(typeName, factory);
+    }
+    create(name, form, parent) {
+        const f = this.factories.get(name);
+        return f ? f(name, form, parent) : null;
+    }
+}
+exports.ComponentTypeRegistry = ComponentTypeRegistry;
 class TApplication {
+    static TheApplication;
     forms = [];
-    types = new UIPlugin_1.ComponentTypeRegistry();
+    types = new ComponentTypeRegistry();
     mainForm = null;
+    constructor() {
+        TApplication.TheApplication = this;
+        (0, registerVcl_1.registerVclTypes)(this.types);
+    }
     createForm(ctor, name) {
         const f = new ctor(name);
         this.forms.push(f);

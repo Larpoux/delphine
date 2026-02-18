@@ -1,7 +1,7 @@
 // English comments as requested.
 
-import { ComponentTypeRegistry } from '@drt';
-import { TButton, TForm, TComponent } from '@vcl';
+//import { ComponentTypeRegistry } from '@drt';
+import { TButton, TForm, TComponent, ComponentTypeRegistry } from '@vcl';
 
 export function registerVclTypes(reg: ComponentTypeRegistry): void {
         // Note: "TForm" is typically instantiated by the App, not by DOM scanning.

@@ -2,6 +2,7 @@
 // English comments as requested.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerVclTypes = registerVclTypes;
+//import { ComponentTypeRegistry } from '@drt';
 const _vcl_1 = require("@vcl");
 function registerVclTypes(reg) {
     // Note: "TForm" is typically instantiated by the App, not by DOM scanning.

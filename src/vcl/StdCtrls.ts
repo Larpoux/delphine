@@ -1,5 +1,6 @@
-import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
+//import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
 // //import type { Json, DelphineServices, ComponentTypeRegistry } from '../drt/UIPlugin';
+import { registerVclTypes } from './registerVcl';
 
 export type ComponentFactory = (name: string, form: TForm, owner: TComponent) => TComponent;
 
@@ -86,9 +87,10 @@ export class ComponentRegistry {
 
                         console.log(`titi = ${titi}`);
 
-                        let comp: TComponent | null = null;
+                        //let comp: TComponent | null = null;
 
                         // The following switch is just for now. In the future it will not be necessary
+                        /*
                         switch (type) {
                                 case 'my-button':
                                         comp = new TButton(name!, form, form);
@@ -100,7 +102,11 @@ export class ComponentRegistry {
 
                                 default:
                                         break;
-                        }
+                        }*/
+                        //const application: TApplication = new TApplication();
+                        const factory = TApplication.TheApplication.types.get(type!);
+                        let comp: TComponent | null = null;
+                        if (factory) comp = factory(name!, form, form);
 
                         if (comp) {
                                 comp.elem = el;
@@ -319,10 +325,35 @@ export class TButton extends TComponent {
         }
 }
 
+//export type ComponentFactory = (name: string, form: TForm, parent: TComponent) => TComponent;
+
+export class ComponentTypeRegistry {
+        private factories = new Map<string, ComponentFactory>();
+
+        get(name: string): ComponentFactory | null | undefined {
+                return this.factories.get(name);
+        }
+
+        registerType(typeName: string, factory: ComponentFactory) {
+                this.factories.set(typeName, factory);
+        }
+
+        create(name: string, form: TForm, parent: TComponent): TComponent | null {
+                const f = this.factories.get(name);
+                return f ? f(name, form, parent) : null;
+        }
+}
+
 export class TApplication {
+        static TheApplication: TApplication;
         private forms: TForm[] = [];
         readonly types = new ComponentTypeRegistry();
         mainForm: TForm | null = null;
+
+        constructor() {
+                TApplication.TheApplication = this;
+                registerVclTypes(this.types);
+        }
 
         createForm<T extends TForm>(ctor: new (...args: any[]) => T, name: string): T {
                 const f = new ctor(name);
