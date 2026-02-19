@@ -1,6 +1,7 @@
 //import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
 // //import type { Json, DelphineServices, ComponentTypeRegistry } from '../drt/UIPlugin';
 //import { registerVclTypes } from './registerVcl';
+import { Button } from 'grapesjs';
 import { registerBuiltins } from './registerVcl';
 
 export type ComponentFactory = (name: string, form: TForm, owner: TComponent) => TComponent;
@@ -452,8 +453,35 @@ export class TForm extends TComponent {
 }
 
 export class TButton extends TComponent {
-        caption: string = '';
-        enabled: boolean = true;
+        private _caption: string = '';
+
+        htmlButton(): HTMLButtonElement {
+                return this.htmlElement! as HTMLButtonElement;
+        }
+
+        get caption() {
+                return this._caption;
+        }
+        set caption(caption) {
+                this.setCaption(caption);
+        }
+        setCaption(s: string) {
+                this._caption = s;
+                if (this.htmlElement) this.htmlElement.textContent = s;
+        }
+
+        private _enabled: boolean = true;
+        get enabled() {
+                return this._enabled;
+        }
+        set enabled(enabled) {
+                this.setEnabled(enabled);
+        }
+        setEnabled(enabled: boolean) {
+                this._enabled = enabled;
+                if (this.htmlElement) this.htmlButton().disabled = !enabled;
+        }
+
         constructor(name: string, form: TForm, parent: TComponent) {
                 super(name, form, parent);
                 //super(name, form, parent);
@@ -463,11 +491,6 @@ export class TButton extends TComponent {
         }
         allowsChildren(): boolean {
                 return false;
-        }
-
-        setCaption(s: string) {
-                this.caption = s;
-                if (this.htmlElement) this.htmlElement.textContent = s;
         }
 }
 

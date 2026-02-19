@@ -42,12 +42,15 @@ console.log("clicked!", element);
             return;
         }
         //btn.color = TColor.rgb(0, 0, 255);
-        this.componentRegistry.get('button1').color = _vcl_1.TColor.rgb(255, 0, 0);
+        btn.color = _vcl_1.TColor.rgb(255, 0, 0);
+        btn.setCaption('MIMI');
         console.log('Button1 clicked!!!!');
     }
     zaza_onclick() {
-        this.componentRegistry.get('button1').color = _vcl_1.TColor.rgb(0, 255, 0);
+        const btn = this.componentRegistry.get('button1');
+        btn.color = _vcl_1.TColor.rgb(0, 255, 0);
         console.log('zaza clicked!!!!');
+        btn.enabled = false;
     }
 } // class zaza
 class MyApplication extends _vcl_1.TApplication {

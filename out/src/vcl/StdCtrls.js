@@ -1,9 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TApplication = exports.TMetaButton = exports.TButton = exports.TForm = exports.TDocument = exports.TComponent = exports.ComponentRegistry = exports.TColor = exports.ComponentTypeRegistry = exports.TMetaComponent = void 0;
-//import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
-// //import type { Json, DelphineServices, ComponentTypeRegistry } from '../drt/UIPlugin';
-//import { registerVclTypes } from './registerVcl';
 const registerVcl_1 = require("./registerVcl");
 // English comments as requested.
 class TMetaComponent {
@@ -362,8 +359,33 @@ class TForm extends TComponent {
 }
 exports.TForm = TForm;
 class TButton extends TComponent {
-    caption = '';
-    enabled = true;
+    _caption = '';
+    htmlButton() {
+        return this.htmlElement;
+    }
+    get caption() {
+        return this._caption;
+    }
+    set caption(caption) {
+        this.setCaption(caption);
+    }
+    setCaption(s) {
+        this._caption = s;
+        if (this.htmlElement)
+            this.htmlElement.textContent = s;
+    }
+    _enabled = true;
+    get enabled() {
+        return this._enabled;
+    }
+    set enabled(enabled) {
+        this.setEnabled(enabled);
+    }
+    setEnabled(enabled) {
+        this._enabled = enabled;
+        if (this.htmlElement)
+            this.htmlButton().disabled = !enabled;
+    }
     constructor(name, form, parent) {
         super(name, form, parent);
         //super(name, form, parent);
@@ -373,11 +395,6 @@ class TButton extends TComponent {
     }
     allowsChildren() {
         return false;
-    }
-    setCaption(s) {
-        this.caption = s;
-        if (this.htmlElement)
-            this.htmlElement.textContent = s;
     }
 }
 exports.TButton = TButton;

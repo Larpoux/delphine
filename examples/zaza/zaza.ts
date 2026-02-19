@@ -47,13 +47,16 @@ const runtime = {
                         return;
                 }
                 //btn.color = TColor.rgb(0, 0, 255);
-                this.componentRegistry.get('button1')!.color = TColor.rgb(255, 0, 0);
+                btn!.color = TColor.rgb(255, 0, 0);
+                btn!.setCaption('MIMI');
                 console.log('Button1 clicked!!!!');
         }
 
         zaza_onclick() {
-                this.componentRegistry.get('button1')!.color = TColor.rgb(0, 255, 0);
+                const btn = this.componentRegistry.get<TButton>('button1');
+                btn!.color = TColor.rgb(0, 255, 0);
                 console.log('zaza clicked!!!!');
+                btn!.enabled = false;
         }
 
         //installDelphineRuntime(runtime);
