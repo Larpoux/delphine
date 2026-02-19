@@ -6,14 +6,16 @@ import { ComponentTypeRegistry } from '@vcl/StdCtrls';
 import { PluginHost } from '@drt/UIPlugin';
 
 export function registerPluginTypes(reg: ComponentTypeRegistry): void {
+        /*
         // Example: any type name can be provided by a plugin.
-        reg.registerType('chartjs-pie', (name: string, form: TForm, parent: TComponent) => {
+        reg.register.registerType('chartjs-pie', (name: string, form: TForm, parent: TComponent) => {
                 return new PluginHost(name, form, parent);
         });
 
         reg.registerType('vue-hello', (name: string, form: TForm, parent: TComponent) => {
                 return new PluginHost(name, form, parent);
         });
+        */
 }
 
 class Zaza extends TForm {

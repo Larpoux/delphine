@@ -1,27 +1,86 @@
 //import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
 // //import type { Json, DelphineServices, ComponentTypeRegistry } from '../drt/UIPlugin';
-import { registerVclTypes } from './registerVcl';
+//import { registerVclTypes } from './registerVcl';
+import { registerBuiltins } from './registerVcl';
 
 export type ComponentFactory = (name: string, form: TForm, owner: TComponent) => TComponent;
 
-/*
-export class ComponentRegistry {
-        private factories = new Map<string, ComponentFactory>();
+//import type { Json } from './Json';
+export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
-        registerType(typeName: string, factory: ComponentFactory): void {
-                this.factories.set(typeName, factory);
+// English comments as requested.
+export interface TComponentClass<T extends TComponent = TComponent> {
+        // The symbolic name used in HTML: data-component="TButton" or "my-button"
+        readonly typeName: string;
+
+        // Create the runtime instance and attach it to the DOM element.
+        create(name: string, form: TForm, parent: TComponent, element: HTMLElement): T;
+
+        // Optional: parse HTML attributes -> props/state
+        // Example: data-caption="OK" -> { caption: "OK" }
+        parseProps?(elem: HTMLElement): Json;
+
+        // Optional: apply props to the component (can be called after create)
+        applyProps?(c: T, props: Json): void;
+
+        // Optional: Design-time metadata (palette, inspector, etc.)
+        designTime?: {
+                paletteGroup?: string;
+                displayName?: string;
+                icon?: string; // later
+                // property schema could live here
+        };
+}
+
+//import type { TComponentClass } from './TComponentClass';
+//import type { TComponent } from '@vcl';
+
+// English comments as requested.
+export class ComponentTypeRegistry {
+        private readonly classes = new Map<string, TComponentClass>();
+
+        register<T extends TComponent>(cls: TComponentClass<T>) {
+                if (this.classes.has(cls.typeName)) {
+                        throw new Error(`Component type already registered: ${cls.typeName}`);
+                }
+                this.classes.set(cls.typeName, cls);
+        }
+
+        get(typeName: string): TComponentClass | undefined {
+                return this.classes.get(typeName);
         }
 
         has(typeName: string): boolean {
-                return this.factories.has(typeName);
+                return this.classes.has(typeName);
         }
 
-        create(typeName: string, name: string, form: TForm, owner: TComponent): TComponent | null {
-                const f = this.factories.get(typeName);
-                return f ? f(name, form, owner) : null;
+        list(): string[] {
+                return [...this.classes.keys()].sort();
         }
 }
-        */
+
+/*
+
+//export type ComponentFactory = (name: string, form: TForm, parent: TComponent) => TComponent;
+
+export class ComponentTypeRegistry {
+        private factories = new Map<string, ComponentFactory>();
+
+        get(name: string): ComponentFactory | null | undefined {
+                return this.factories.get(name);
+        }
+
+        registerType(typeName: string, factory: ComponentFactory) {
+                this.factories.set(typeName, factory);
+        }
+
+        create(name: string, form: TForm, parent: TComponent): TComponent | null {
+                const f = this.factories.get(name);
+                return f ? f(name, form, parent) : null;
+        }
+}
+
+*/
 
 export class TColor {
         s: string;
@@ -38,18 +97,19 @@ export class TColor {
 }
 
 export class ComponentRegistry {
-        private byName = new Map<string, TComponent>();
+        private instances = new Map<string, TComponent>();
 
-        register(name: string, c: TComponent) {
-                this.byName.set(name, c);
+        constructor() {}
+
+        registerInstance(name: string, c: TComponent) {
+                this.instances.set(name, c);
         }
-
         get<T extends TComponent = TComponent>(name: string): T | undefined {
-                return this.byName.get(name) as T | undefined;
+                return this.instances.get(name) as T | undefined;
         }
 
         clear() {
-                this.byName.clear();
+                this.instances.clear();
         }
 
         resolveRoot(): HTMLElement {
@@ -64,7 +124,7 @@ export class ComponentRegistry {
                 return document.body ?? document.documentElement;
         }
 
-        buildComponentTree(form: TForm) {
+        buildComponentTree(form: TForm, component: TComponent) {
                 this.clear();
                 // resolveRoot est maintenant appelé par TForm::show(). Inutile de le faire ici
                 //const root = TDocument.body;
@@ -74,18 +134,19 @@ export class ComponentRegistry {
 
                 // --- FORM ---
                 // provisoirement if (root.getAttribute('data-component') === 'TForm') {
-                this.register(form.name, form);
+
+                this.registerInstance(component.name, form);
                 //}
-                const root = form.elem!;
+                const root = component.elem!;
 
                 // --- CHILD COMPONENTS ---
-                root.querySelectorAll('[data-component]').forEach((el) => {
+                root.querySelectorAll(':scope > [data-component]').forEach((el) => {
                         if (el === root) return;
                         const name = el.getAttribute('data-name');
                         const type = el.getAttribute('data-component');
-                        const titi = el.getAttribute('data-onclick');
+                        //const titi = el.getAttribute('data-onclick');
 
-                        console.log(`titi = ${titi}`);
+                        //console.log(`titi = ${titi}`);
 
                         //let comp: TComponent | null = null;
 
@@ -104,13 +165,39 @@ export class ComponentRegistry {
                                         break;
                         }*/
                         //const application: TApplication = new TApplication();
-                        const factory = TApplication.TheApplication.types.get(type!);
+                        //const factory = TApplication.TheApplication.types.get(type!);
+                        /*
                         let comp: TComponent | null = null;
                         if (factory) comp = factory(name!, form, form);
 
                         if (comp) {
                                 comp.elem = el;
                                 this.register(name!, comp);
+                        }
+                                */
+
+                        const cls = TApplication.TheApplication.types.get(type!);
+                        if (!cls) return;
+
+                        const child = cls.create(name!, form, component, el as HTMLElement);
+                        // name: string, form: TForm, parent: TComponent, elem: HTMLElement
+                        if (!child) return;
+
+                        child.parent = component;
+
+                        child.elem = el;
+                        child.form = form;
+                        // Optional props
+                        if (cls.parseProps && cls.applyProps) {
+                                const props = cls.parseProps(el as HTMLElement);
+                                cls.applyProps(child, props);
+                        }
+
+                        this.registerInstance(name!, child);
+                        component.children.push(child);
+
+                        if (child.allowsChildren()) {
+                                this.buildComponentTree(form, child);
                         }
                 });
                 form.addEventListener('click');
@@ -133,6 +220,11 @@ export class TComponent {
                 parent?.children.push(this);
                 this.form = form;
                 this.name = name;
+        }
+
+        /** May contain child components */
+        allowsChildren(): boolean {
+                return true;
         }
 
         get color(): TColor {
@@ -235,7 +327,7 @@ export class TForm extends TComponent {
                         this.elem = this.componentRegistry.resolveRoot(); // ou this.resolveRoot()
                 }
                 if (!this._mounted) {
-                        this.componentRegistry.buildComponentTree(this);
+                        this.componentRegistry.buildComponentTree(this, this);
                         this._mounted = true;
                 }
 
@@ -320,29 +412,51 @@ export class TForm extends TComponent {
 }
 
 export class TButton extends TComponent {
+        caption = '';
         constructor(name: string, form: TForm, parent: TComponent) {
                 super(name, form, parent);
+                //super(name, form, parent);
+                //this.name = name;
+                //this.form = form;
+                //this.parent = parent;
+        }
+        allowsChildren(): boolean {
+                return false;
+        }
+
+        setCaption(s: string) {
+                this.caption = s;
+                if (this.htmlElement) this.htmlElement.textContent = s;
         }
 }
 
-//export type ComponentFactory = (name: string, form: TForm, parent: TComponent) => TComponent;
+// English comments as requested.
+export const TButtonClass: TComponentClass<TButton> = {
+        typeName: 'TButton',
 
-export class ComponentTypeRegistry {
-        private factories = new Map<string, ComponentFactory>();
+        create(name: string, form: TForm, parent: TComponent, elem: HTMLElement) {
+                const b = new TButton(name, form, parent);
+                b.elem = elem;
+                return b;
+        },
 
-        get(name: string): ComponentFactory | null | undefined {
-                return this.factories.get(name);
+        parseProps(elem) {
+                // Minimal example: data-caption="OK"
+                const caption = elem.getAttribute('data-caption') ?? '';
+                return { caption };
+        },
+
+        applyProps(b, props) {
+                // Note: props is Json; narrow it safely.
+                const o = props as any;
+                if (typeof o.caption === 'string') b.setCaption(o.caption);
+        },
+
+        designTime: {
+                paletteGroup: 'Standard',
+                displayName: 'Button'
         }
-
-        registerType(typeName: string, factory: ComponentFactory) {
-                this.factories.set(typeName, factory);
-        }
-
-        create(name: string, form: TForm, parent: TComponent): TComponent | null {
-                const f = this.factories.get(name);
-                return f ? f(name, form, parent) : null;
-        }
-}
+};
 
 export class TApplication {
         static TheApplication: TApplication;
@@ -352,7 +466,7 @@ export class TApplication {
 
         constructor() {
                 TApplication.TheApplication = this;
-                registerVclTypes(this.types);
+                registerBuiltins(this.types);
         }
 
         createForm<T extends TForm>(ctor: new (...args: any[]) => T, name: string): T {

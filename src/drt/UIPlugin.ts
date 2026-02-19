@@ -2,9 +2,7 @@
 // A framework-agnostic contract.
 // Delphine never talks to React/Vue/Svelte directly — only to this interface.
 import '@vcl';
-import { TComponent, TForm, ComponentFactory } from '@vcl';
-
-export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
+import { TComponent, TForm, ComponentFactory, Json } from '@vcl';
 
 export interface DelphineLogger {
         debug(msg: string, data?: Json): void;
