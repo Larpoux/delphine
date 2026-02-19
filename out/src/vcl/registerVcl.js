@@ -6,7 +6,7 @@ exports.registerBuiltins = registerBuiltins;
 const _vcl_1 = require("@vcl");
 // English comments as requested.
 function registerBuiltins(types) {
-    types.register(_vcl_1.TButtonClass);
+    types.register(new _vcl_1.TMetaButton());
     // types.register(TEditClass);
     // types.register(TLabelClass);
 }

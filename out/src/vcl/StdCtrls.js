@@ -1,21 +1,30 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TApplication = exports.TButtonClass = exports.TButton = exports.TForm = exports.TDocument = exports.TComponent = exports.ComponentRegistry = exports.TColor = exports.ComponentTypeRegistry = void 0;
+exports.TApplication = exports.TMetaButton = exports.TButton = exports.TForm = exports.TDocument = exports.TComponent = exports.ComponentRegistry = exports.TColor = exports.ComponentTypeRegistry = exports.TMetaComponent = void 0;
 //import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
 // //import type { Json, DelphineServices, ComponentTypeRegistry } from '../drt/UIPlugin';
 //import { registerVclTypes } from './registerVcl';
 const registerVcl_1 = require("./registerVcl");
+// English comments as requested.
+class TMetaComponent {
+    /** Property schema for this component type */
+    props() {
+        return [];
+    }
+}
+exports.TMetaComponent = TMetaComponent;
 //import type { TComponentClass } from './TComponentClass';
 //import type { TComponent } from '@vcl';
-// English comments as requested.
 class ComponentTypeRegistry {
+    // We store heterogeneous metas, so we keep them as TMetaComponent<any>.
     classes = new Map();
-    register(cls) {
-        if (this.classes.has(cls.typeName)) {
-            throw new Error(`Component type already registered: ${cls.typeName}`);
+    register(meta) {
+        if (this.classes.has(meta.typeName)) {
+            throw new Error(`Component type already registered: ${meta.typeName}`);
         }
-        this.classes.set(cls.typeName, cls);
+        this.classes.set(meta.typeName, meta);
     }
+    // If you just need "something meta", return any-meta.
     get(typeName) {
         return this.classes.get(typeName);
     }
@@ -85,6 +94,28 @@ class ComponentRegistry {
         // Last resort.
         return document.body ?? document.documentElement;
     }
+    readProps(el, meta) {
+        const out = {};
+        for (const spec of meta.props()) {
+            const raw = el.getAttribute(`data-${spec.name}`);
+            if (raw == null)
+                continue;
+            out[spec.name] = this.convert(raw, spec.kind);
+        }
+        return out;
+    }
+    convert(raw, kind) {
+        switch (kind) {
+            case 'string':
+                return raw;
+            case 'number':
+                return Number(raw);
+            case 'boolean':
+                return raw === 'true' || raw === '1' || raw === '';
+            case 'color':
+                return raw; // ou parse en TColor si vous avez
+        }
+    }
     buildComponentTree(form, component) {
         this.clear();
         // resolveRoot est maintenant appelé par TForm::show(). Inutile de le faire ici
@@ -134,17 +165,20 @@ class ComponentRegistry {
             const cls = TApplication.TheApplication.types.get(type);
             if (!cls)
                 return;
-            const child = cls.create(name, form, component, el);
+            const child = cls.create(name, form, component);
             // name: string, form: TForm, parent: TComponent, elem: HTMLElement
             if (!child)
                 return;
-            child.parent = component;
+            //child.parent = component;
             child.elem = el;
-            child.form = form;
+            //child.form = form;
+            //child.name = name!;
             // Optional props
-            if (cls.parseProps && cls.applyProps) {
-                const props = cls.parseProps(el);
-                cls.applyProps(child, props);
+            const props = this.readProps(el, cls);
+            for (const spec of cls.props()) {
+                if (props[spec.name] !== undefined) {
+                    spec.apply(child, props[spec.name]);
+                }
             }
             this.registerInstance(name, child);
             component.children.push(child);
@@ -329,6 +363,7 @@ class TForm extends TComponent {
 exports.TForm = TForm;
 class TButton extends TComponent {
     caption = '';
+    enabled = true;
     constructor(name, form, parent) {
         super(name, form, parent);
         //super(name, form, parent);
@@ -346,30 +381,20 @@ class TButton extends TComponent {
     }
 }
 exports.TButton = TButton;
-// English comments as requested.
-exports.TButtonClass = {
-    typeName: 'TButton',
-    create(name, form, parent, elem) {
-        const b = new TButton(name, form, parent);
-        b.elem = elem;
-        return b;
-    },
-    parseProps(elem) {
-        // Minimal example: data-caption="OK"
-        const caption = elem.getAttribute('data-caption') ?? '';
-        return { caption };
-    },
-    applyProps(b, props) {
-        // Note: props is Json; narrow it safely.
-        const o = props;
-        if (typeof o.caption === 'string')
-            b.setCaption(o.caption);
-    },
-    designTime: {
-        paletteGroup: 'Standard',
-        displayName: 'Button'
+class TMetaButton extends TMetaComponent {
+    typeName = 'TButton';
+    create(name, form, parent) {
+        return new TButton(name, form, parent);
     }
-};
+    props() {
+        return [
+            { name: 'caption', kind: 'string', apply: (o, v) => (o.caption = String(v)) },
+            { name: 'enabled', kind: 'boolean', apply: (o, v) => (o.enabled = Boolean(v)) },
+            { name: 'color', kind: 'color', apply: (o, v) => (o.color = v) }
+        ];
+    }
+}
+exports.TMetaButton = TMetaButton;
 class TApplication {
     static TheApplication;
     forms = [];
