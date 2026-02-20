@@ -3,7 +3,7 @@
 import { TForm, TColor, TApplication, TComponent, TButton } from '@vcl';
 import { ComponentTypeRegistry } from '@vcl/StdCtrls';
 //import { ComponentRegistry } from '@drt/ComponentRegistry';
-import { PluginHost } from '@drt/UIPlugin';
+import { TPluginHost } from '@drt/UIPlugin';
 
 export function registerPluginTypes(reg: ComponentTypeRegistry): void {
         /*
@@ -40,7 +40,17 @@ const runtime = {
 }; 
 */
 
-        button1_onclick() {
+        protected onMyCreate(ev: Event | null, sender: TComponent) {
+                const btn = this.componentRegistry.get('button2');
+                if (btn) btn.color = TColor.rgb(0, 0, 255);
+        }
+
+        protected onMyShown(ev: Event | null, sender: TComponent) {
+                const btn = this.componentRegistry.get('button3');
+                if (btn) btn.color = TColor.rgb(0, 255, 255);
+        }
+
+        button1_onclick(ev: Event | null, sender: TComponent) {
                 const btn = this.componentRegistry.get<TButton>('button1');
                 if (!btn) {
                         console.warn('button1 not found in registry');
@@ -52,11 +62,11 @@ const runtime = {
                 console.log('Button1 clicked!!!!');
         }
 
-        zaza_onclick() {
-                const btn = this.componentRegistry.get<TButton>('button1');
+        zaza_onclick(ev: Event | null, sender: TComponent) {
+                const btn = this.componentRegistry.get<TButton>('buttonx');
                 btn!.color = TColor.rgb(0, 255, 0);
                 console.log('zaza clicked!!!!');
-                btn!.enabled = false;
+                //btn!.enabled = false;
         }
 
         //installDelphineRuntime(runtime);

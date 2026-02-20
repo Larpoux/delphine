@@ -35,7 +35,17 @@ console.log("clicked!", element);
 },
 };
 */
-    button1_onclick() {
+    onMyCreate(ev, sender) {
+        const btn = this.componentRegistry.get('button2');
+        if (btn)
+            btn.color = _vcl_1.TColor.rgb(0, 0, 255);
+    }
+    onMyShown(ev, sender) {
+        const btn = this.componentRegistry.get('button3');
+        if (btn)
+            btn.color = _vcl_1.TColor.rgb(0, 255, 255);
+    }
+    button1_onclick(ev, sender) {
         const btn = this.componentRegistry.get('button1');
         if (!btn) {
             console.warn('button1 not found in registry');
@@ -46,11 +56,11 @@ console.log("clicked!", element);
         btn.setCaption('MIMI');
         console.log('Button1 clicked!!!!');
     }
-    zaza_onclick() {
-        const btn = this.componentRegistry.get('button1');
+    zaza_onclick(ev, sender) {
+        const btn = this.componentRegistry.get('buttonx');
         btn.color = _vcl_1.TColor.rgb(0, 255, 0);
         console.log('zaza clicked!!!!');
-        btn.enabled = false;
+        //btn!.enabled = false;
     }
 } // class zaza
 class MyApplication extends _vcl_1.TApplication {

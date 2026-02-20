@@ -5,7 +5,7 @@ import { TButton, TMetaComponent, TForm, TComponent, ComponentTypeRegistry, TMet
 
 // English comments as requested.
 export function registerBuiltins(types: ComponentTypeRegistry) {
-        types.register(new TMetaButton());
+        types.register(TMetaButton.metaClass);
         // types.register(TEditClass);
         // types.register(TLabelClass);
 }

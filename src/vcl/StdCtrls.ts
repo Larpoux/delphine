@@ -1,7 +1,7 @@
 //import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
 // //import type { Json, DelphineServices, ComponentTypeRegistry } from '../drt/UIPlugin';
 //import { registerVclTypes } from './registerVcl';
-import { Button } from 'grapesjs';
+//import { Button } from 'grapesjs';
 import { registerBuiltins } from './registerVcl';
 
 export type ComponentFactory = (name: string, form: TForm, owner: TComponent) => TComponent;
@@ -10,23 +10,78 @@ export type ComponentFactory = (name: string, form: TForm, owner: TComponent) =>
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
 type PropKind = 'string' | 'number' | 'boolean' | 'color';
-type PropSpec<T, V = unknown> = {
+export type PropSpec<T, V = unknown> = {
         name: string;
         kind: PropKind;
         apply: (obj: T, value: V) => void;
 };
+
+export interface IPluginHost {
+        setPluginSpec(spec: { plugin: string | null; props: any }): void;
+        mountPluginIfReady(services: DelphineServices): void;
+}
+
+export interface DelphineLogger {
+        debug(msg: string, data?: Json): void;
+        info(msg: string, data?: Json): void;
+        warn(msg: string, data?: Json): void;
+        error(msg: string, data?: Json): void;
+}
+
+export interface DelphineEventBus {
+        // Subscribe to an app event.
+        on(eventName: string, handler: (payload: Json) => void): () => void;
+
+        // Publish an app event.
+        emit(eventName: string, payload: Json): void;
+}
+
+export interface DelphineStorage {
+        get(key: string): Promise<Json | undefined>;
+        set(key: string, value: Json): Promise<void>;
+        remove(key: string): Promise<void>;
+}
+export interface DelphineServices {
+        log: {
+                debug(msg: string, data?: any): void;
+                info(msg: string, data?: any): void;
+                warn(msg: string, data?: any): void;
+                error(msg: string, data?: any): void;
+        };
+
+        bus: {
+                on(event: string, handler: (payload: any) => void): () => void;
+                emit(event: string, payload: any): void;
+        };
+
+        storage: {
+                get(key: string): Promise<any> | null;
+                set(key: string, value: any): Promise<void> | null;
+                remove(key: string): Promise<void> | null;
+        };
+
+        // futur
+        // i18n?: ...
+        // nav?: ...
+}
+
 // English comments as requested.
 export abstract class TMetaComponent<T extends TComponent = TComponent> {
         // The symbolic name used in HTML: data-component="TButton" or "my-button"
         abstract readonly typeName: string;
+        constructor() {}
+
+        abstract getMetaClass(): TMetaComponent<T>;
 
         // Create the runtime instance and attach it to the DOM element.
-        abstract create(name: string, form: TForm, parent: TComponent): T;
+        abstract create(name: string, form: TForm, parent: TComponent<any>): T;
 
         /** Property schema for this component type */
         props(): PropSpec<T>[] {
                 return [];
         }
+
+        domEvents?(): string[]; // default [];
 
         /*
         // Optional: parse HTML attributes -> props/state
@@ -114,6 +169,32 @@ export class TColor {
 export class ComponentRegistry {
         private instances = new Map<string, TComponent>();
 
+        logger = {
+                debug(msg: string, data?: Json): void {},
+                info(msg: string, data?: Json): void {},
+                warn(msg: string, data?: Json): void {},
+                error(msg: string, data?: Json): void {}
+        };
+
+        eventBus = {
+                on(event: string, handler: (payload: any) => void): () => void {
+                        return () => void {};
+                },
+                emit(event: string, payload: any): void {}
+        };
+
+        storage = {
+                get(key: string): Promise<any> | null {
+                        return null;
+                },
+                set(key: string, value: any): Promise<void> | null {
+                        return null;
+                },
+                remove(key: string): Promise<void> | null {
+                        return null;
+                }
+        };
+
         constructor() {}
 
         registerInstance(name: string, c: TComponent) {
@@ -122,6 +203,12 @@ export class ComponentRegistry {
         get<T extends TComponent = TComponent>(name: string): T | undefined {
                 return this.instances.get(name) as T | undefined;
         }
+
+        services: DelphineServices = {
+                log: this.logger,
+                bus: this.eventBus,
+                storage: this.storage
+        };
 
         clear() {
                 this.instances.clear();
@@ -160,6 +247,15 @@ export class ComponentRegistry {
                                 return raw === 'true' || raw === '1' || raw === '';
                         case 'color':
                                 return raw; // ou parse en TColor si vous avez
+                }
+        }
+
+        applyProps(child: TComponent, cls: TMetaComponent) {
+                const props = this.readProps(child.elem!, cls);
+                for (const spec of cls.props()) {
+                        if (props[spec.name] !== undefined) {
+                                spec.apply(child, props[spec.name]);
+                        }
                 }
         }
 
@@ -228,25 +324,31 @@ export class ComponentRegistry {
                         //child.form = form;
                         //child.name = name!;
                         // Optional props
-                        const props = this.readProps(el, cls);
-                        for (const spec of cls.props()) {
-                                if (props[spec.name] !== undefined) {
-                                        spec.apply(child, props[spec.name]);
-                                }
-                        }
+                        this.applyProps(child, cls);
                         this.registerInstance(name!, child);
                         component.children.push(child);
+                        const maybeHost = child as unknown as Partial<IPluginHost>;
+                        if (maybeHost && typeof maybeHost.setPluginSpec === 'function') {
+                                const plugin = el.getAttribute('data-plugin');
+                                const raw = el.getAttribute('data-props');
+                                const props = raw ? JSON.parse(raw) : {};
+
+                                maybeHost.setPluginSpec({ plugin, props });
+                                maybeHost.mountPluginIfReady!(this.services);
+                                //maybeHost.mountFromRegistry(services);
+                        }
 
                         if (child.allowsChildren()) {
                                 this.buildComponentTree(form, child);
                         }
                 });
-                form.addEventListener('click');
         }
 }
 
-export class TComponent {
-        parent: TComponent | null = null;
+export class TComponent<TSelf extends TComponent<any> = any> {
+        readonly metaClass: TMetaComponent<TSelf>;
+        readonly name: string;
+        readonly parent: TComponent<any> | null = null;
         form: TForm | null = null;
         children: TComponent[] = [];
 
@@ -254,13 +356,14 @@ export class TComponent {
         get htmlElement(): HTMLElement | null {
                 return this.elem as HTMLElement | null;
         }
-        name: string;
-        constructor(name: string, form: TForm | null, parent: TComponent | null) {
+        constructor(metaClass: TMetaComponent<TSelf>, name: string, form: TForm | null, parent: TComponent | null) {
+                this.metaClass = metaClass;
                 this.name = name;
                 this.parent = parent;
                 parent?.children.push(this);
                 this.form = form;
                 this.name = name;
+                //this.metaClass = metaClass;
         }
 
         /** May contain child components */
@@ -323,10 +426,25 @@ export class TComponent {
 export class TDocument {
         static document: TDocument = new TDocument(document);
         static body = document.body;
-
         htmlDoc: Document;
         constructor(htmlDoc: Document) {
                 this.htmlDoc = htmlDoc;
+        }
+}
+
+export class TMetaForm extends TMetaComponent<TForm> {
+        static metaClass: TMetaForm = new TMetaForm();
+        getMetaClass() {
+                return TMetaForm.metaClass;
+        }
+        readonly typeName = 'TForm';
+
+        create(name: string, form: TForm, parent: TComponent) {
+                return new TForm(name);
+        }
+
+        props(): PropSpec<TForm>[] {
+                return [];
         }
 }
 
@@ -335,10 +453,14 @@ export class TForm extends TComponent {
         private _mounted = false;
         componentRegistry: ComponentRegistry = new ComponentRegistry();
         constructor(name: string) {
-                super(name, null, null);
+                super(TMetaForm.metaClass, name, null, null);
                 this.form = this;
                 TForm.forms.set(name, this);
                 //this.parent = this;
+        }
+
+        get application(): TApplication {
+                return this.form?.application ?? TApplication.TheApplication;
         }
 
         /*        findFormFromEventTarget(currentTargetElem: Element): TForm | null {
@@ -362,6 +484,79 @@ export class TForm extends TComponent {
                 return TForm.forms.get(formName) ?? null;
         }
 
+        private _ac: AbortController | null = null;
+
+        installEventRouter() {
+                this._ac?.abort();
+                this._ac = new AbortController();
+                const { signal } = this._ac;
+
+                const root = this.elem as Element | null;
+                if (!root) return;
+
+                // same handler for everybody
+                const handler = (ev: Event) => this.dispatchDomEvent(ev);
+
+                for (const type of ['click', 'input', 'change', 'keydown']) {
+                        root.addEventListener(type, handler, { capture: true, signal });
+                }
+
+                for (const type in this.metaClass.domEvents) {
+                        root.addEventListener(type, handler, { capture: true, signal });
+                }
+        }
+
+        disposeEventRouter() {
+                this._ac?.abort();
+                this._ac = null;
+        }
+
+        private handleEvent(ev: Event, el: Element, attribute: string): boolean {
+                const handlerName = el.getAttribute(attribute);
+
+                // If we found a handler on this element, dispatch it
+                if (handlerName && handlerName !== '') {
+                        const name = el.getAttribute('data-name');
+                        const sender = name ? (this.componentRegistry.get(name) ?? null) : null;
+
+                        const maybeMethod = (this as any)[handlerName];
+                        if (typeof maybeMethod !== 'function') {
+                                console.log('NOT A METHOD', handlerName);
+                                return false;
+                        }
+
+                        // If sender is missing, fallback to the form itself (safe)
+                        (maybeMethod as (event: Event, sender: any) => any).call(this, ev, sender ?? this);
+                        return true;
+                }
+                return false;
+        }
+
+        // We received an DOM Event. Dispatch it
+        private dispatchDomEvent(ev: Event) {
+                const targetElem = ev.target as Element | null;
+                if (!targetElem) return;
+
+                const evType = ev.type;
+
+                let el: Element | null = targetElem.closest('[data-component]');
+                while (el) {
+                        if (this.handleEvent(ev, el, `data-on${evType}`)) return;
+
+                        //el = this.nextComponentElementUp(el);
+                        const name = el.getAttribute('data-name');
+                        const comp = name ? this.componentRegistry.get(name) : null;
+
+                        // Prefer your VCL-like parent chain when available
+                        const next = comp?.parent?.elem ?? null;
+
+                        // Fallback: standard DOM parent
+                        el = next ?? el.parentElement?.closest('[data-component]') ?? null;
+                }
+
+                // No handler here: try going "up" using your component tree if possible
+        }
+
         show() {
                 // Must be done before buildComponentTree() because `buildComponentTree()` does not do `resolveRoot()` itself.
                 if (!this.elem) {
@@ -369,13 +564,22 @@ export class TForm extends TComponent {
                 }
                 if (!this._mounted) {
                         this.componentRegistry.buildComponentTree(this, this);
+                        this.onCreate(); // Maybe could be done after installEventRouter()
+                        this.installEventRouter();
+                        //mountPluginIfReady();
+                        //this.addEventListener('click');
+                        //this.addEventListener('input');
+                        //this.addEventListener('change');
+                        //this.addEventListener('keydown');
                         this._mounted = true;
                 }
+                this.onShown();
 
                 // TODO
         }
 
-        addEventListener(type: string) {
+        /*
+        addEventListenerxxx(type: string) {
                 console.log('addEventListener ENTER', { hasBody: !!document.body, hasElem: !!this.elem });
                 const g = window as any;
 
@@ -450,9 +654,34 @@ export class TForm extends TComponent {
                         );
                 }
         }
+                */
+
+        protected onCreate() {
+                //const btn = this.componentRegistry.get('button2');
+                const onShownName = this.elem!.getAttribute('data-oncreate');
+                if (onShownName) {
+                        queueMicrotask(() => {
+                                const fn = (this as any)[onShownName];
+                                if (typeof fn === 'function') fn.call(this, null, this);
+                        });
+                }
+                //if (btn) btn.color = TColor.rgb(0, 0, 255);
+        }
+
+        protected onShown() {
+                //const btn = this.componentRegistry.get('button3');
+                //if (btn) btn.color = TColor.rgb(0, 255, 255);
+                const onShownName = this.elem!.getAttribute('data-onshown');
+                if (onShownName) {
+                        queueMicrotask(() => {
+                                const fn = (this as any)[onShownName];
+                                if (typeof fn === 'function') fn.call(this, null, this);
+                        });
+                }
+        }
 }
 
-export class TButton extends TComponent {
+export class TButton extends TComponent<TButton> {
         private _caption: string = '';
 
         htmlButton(): HTMLButtonElement {
@@ -483,7 +712,7 @@ export class TButton extends TComponent {
         }
 
         constructor(name: string, form: TForm, parent: TComponent) {
-                super(name, form, parent);
+                super(TMetaButton.metaClass, name, form, parent);
                 //super(name, form, parent);
                 //this.name = name;
                 //this.form = form;
@@ -495,9 +724,16 @@ export class TButton extends TComponent {
 }
 
 export class TMetaButton extends TMetaComponent<TButton> {
+        constructor() {
+                super();
+        }
+        static metaClass: TMetaButton = new TMetaButton();
+        getMetaClass(): TMetaComponent<TButton> {
+                return TMetaButton.metaClass;
+        }
         readonly typeName = 'TButton';
 
-        create(name: string, form: TForm, parent: TComponent) {
+        create(name: string, form: TForm, parent: TComponent<any>) {
                 return new TButton(name, form, parent);
         }
 
@@ -512,6 +748,8 @@ export class TMetaButton extends TMetaComponent<TButton> {
 
 export class TApplication {
         static TheApplication: TApplication;
+        //static pluginRegistry = new PluginRegistry();
+        //plugins: IPluginRegistry;
         private forms: TForm[] = [];
         readonly types = new ComponentTypeRegistry();
         mainForm: TForm | null = null;

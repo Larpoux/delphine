@@ -1,9 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TApplication = exports.TMetaButton = exports.TButton = exports.TForm = exports.TDocument = exports.TComponent = exports.ComponentRegistry = exports.TColor = exports.ComponentTypeRegistry = exports.TMetaComponent = void 0;
+exports.TApplication = exports.TMetaButton = exports.TButton = exports.TForm = exports.TMetaForm = exports.TDocument = exports.TComponent = exports.ComponentRegistry = exports.TColor = exports.ComponentTypeRegistry = exports.TMetaComponent = void 0;
+//import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
+// //import type { Json, DelphineServices, ComponentTypeRegistry } from '../drt/UIPlugin';
+//import { registerVclTypes } from './registerVcl';
+//import { Button } from 'grapesjs';
 const registerVcl_1 = require("./registerVcl");
 // English comments as requested.
 class TMetaComponent {
+    constructor() { }
     /** Property schema for this component type */
     props() {
         return [];
@@ -70,6 +75,29 @@ class TColor {
 exports.TColor = TColor;
 class ComponentRegistry {
     instances = new Map();
+    logger = {
+        debug(msg, data) { },
+        info(msg, data) { },
+        warn(msg, data) { },
+        error(msg, data) { }
+    };
+    eventBus = {
+        on(event, handler) {
+            return () => void {};
+        },
+        emit(event, payload) { }
+    };
+    storage = {
+        get(key) {
+            return null;
+        },
+        set(key, value) {
+            return null;
+        },
+        remove(key) {
+            return null;
+        }
+    };
     constructor() { }
     registerInstance(name, c) {
         this.instances.set(name, c);
@@ -77,6 +105,11 @@ class ComponentRegistry {
     get(name) {
         return this.instances.get(name);
     }
+    services = {
+        log: this.logger,
+        bus: this.eventBus,
+        storage: this.storage
+    };
     clear() {
         this.instances.clear();
     }
@@ -111,6 +144,14 @@ class ComponentRegistry {
                 return raw === 'true' || raw === '1' || raw === '';
             case 'color':
                 return raw; // ou parse en TColor si vous avez
+        }
+    }
+    applyProps(child, cls) {
+        const props = this.readProps(child.elem, cls);
+        for (const spec of cls.props()) {
+            if (props[spec.name] !== undefined) {
+                spec.apply(child, props[spec.name]);
+            }
         }
     }
     buildComponentTree(form, component) {
@@ -171,23 +212,28 @@ class ComponentRegistry {
             //child.form = form;
             //child.name = name!;
             // Optional props
-            const props = this.readProps(el, cls);
-            for (const spec of cls.props()) {
-                if (props[spec.name] !== undefined) {
-                    spec.apply(child, props[spec.name]);
-                }
-            }
+            this.applyProps(child, cls);
             this.registerInstance(name, child);
             component.children.push(child);
+            const maybeHost = child;
+            if (maybeHost && typeof maybeHost.setPluginSpec === 'function') {
+                const plugin = el.getAttribute('data-plugin');
+                const raw = el.getAttribute('data-props');
+                const props = raw ? JSON.parse(raw) : {};
+                maybeHost.setPluginSpec({ plugin, props });
+                maybeHost.mountPluginIfReady(this.services);
+                //maybeHost.mountFromRegistry(services);
+            }
             if (child.allowsChildren()) {
                 this.buildComponentTree(form, child);
             }
         });
-        form.addEventListener('click');
     }
 }
 exports.ComponentRegistry = ComponentRegistry;
 class TComponent {
+    metaClass;
+    name;
     parent = null;
     form = null;
     children = [];
@@ -195,13 +241,14 @@ class TComponent {
     get htmlElement() {
         return this.elem;
     }
-    name;
-    constructor(name, form, parent) {
+    constructor(metaClass, name, form, parent) {
+        this.metaClass = metaClass;
         this.name = name;
         this.parent = parent;
         parent?.children.push(this);
         this.form = form;
         this.name = name;
+        //this.metaClass = metaClass;
     }
     /** May contain child components */
     allowsChildren() {
@@ -260,15 +307,32 @@ class TDocument {
     }
 }
 exports.TDocument = TDocument;
+class TMetaForm extends TMetaComponent {
+    static metaClass = new TMetaForm();
+    getMetaClass() {
+        return TMetaForm.metaClass;
+    }
+    typeName = 'TForm';
+    create(name, form, parent) {
+        return new TForm(name);
+    }
+    props() {
+        return [];
+    }
+}
+exports.TMetaForm = TMetaForm;
 class TForm extends TComponent {
     static forms = new Map();
     _mounted = false;
     componentRegistry = new ComponentRegistry();
     constructor(name) {
-        super(name, null, null);
+        super(TMetaForm.metaClass, name, null, null);
         this.form = this;
         TForm.forms.set(name, this);
         //this.parent = this;
+    }
+    get application() {
+        return this.form?.application ?? TApplication.TheApplication;
     }
     /*        findFormFromEventTarget(currentTargetElem: Element): TForm | null {
             const formName = currentTargetElem.getAttribute('data-name');
@@ -288,6 +352,64 @@ class TForm extends TComponent {
             return null;
         return TForm.forms.get(formName) ?? null;
     }
+    _ac = null;
+    installEventRouter() {
+        this._ac?.abort();
+        this._ac = new AbortController();
+        const { signal } = this._ac;
+        const root = this.elem;
+        if (!root)
+            return;
+        // same handler for everybody
+        const handler = (ev) => this.dispatchDomEvent(ev);
+        for (const type of ['click', 'input', 'change', 'keydown']) {
+            root.addEventListener(type, handler, { capture: true, signal });
+        }
+        for (const type in this.metaClass.domEvents) {
+            root.addEventListener(type, handler, { capture: true, signal });
+        }
+    }
+    disposeEventRouter() {
+        this._ac?.abort();
+        this._ac = null;
+    }
+    handleEvent(ev, el, attribute) {
+        const handlerName = el.getAttribute(attribute);
+        // If we found a handler on this element, dispatch it
+        if (handlerName && handlerName !== '') {
+            const name = el.getAttribute('data-name');
+            const sender = name ? (this.componentRegistry.get(name) ?? null) : null;
+            const maybeMethod = this[handlerName];
+            if (typeof maybeMethod !== 'function') {
+                console.log('NOT A METHOD', handlerName);
+                return false;
+            }
+            // If sender is missing, fallback to the form itself (safe)
+            maybeMethod.call(this, ev, sender ?? this);
+            return true;
+        }
+        return false;
+    }
+    // We received an DOM Event. Dispatch it
+    dispatchDomEvent(ev) {
+        const targetElem = ev.target;
+        if (!targetElem)
+            return;
+        const evType = ev.type;
+        let el = targetElem.closest('[data-component]');
+        while (el) {
+            if (this.handleEvent(ev, el, `data-on${evType}`))
+                return;
+            //el = this.nextComponentElementUp(el);
+            const name = el.getAttribute('data-name');
+            const comp = name ? this.componentRegistry.get(name) : null;
+            // Prefer your VCL-like parent chain when available
+            const next = comp?.parent?.elem ?? null;
+            // Fallback: standard DOM parent
+            el = next ?? el.parentElement?.closest('[data-component]') ?? null;
+        }
+        // No handler here: try going "up" using your component tree if possible
+    }
     show() {
         // Must be done before buildComponentTree() because `buildComponentTree()` does not do `resolveRoot()` itself.
         if (!this.elem) {
@@ -295,65 +417,117 @@ class TForm extends TComponent {
         }
         if (!this._mounted) {
             this.componentRegistry.buildComponentTree(this, this);
+            this.onCreate(); // Maybe could be done after installEventRouter()
+            this.installEventRouter();
+            //mountPluginIfReady();
+            //this.addEventListener('click');
+            //this.addEventListener('input');
+            //this.addEventListener('change');
+            //this.addEventListener('keydown');
             this._mounted = true;
         }
+        this.onShown();
         // TODO
     }
-    addEventListener(type) {
-        console.log('addEventListener ENTER', { hasBody: !!document.body, hasElem: !!this.elem });
-        const g = window;
-        // Abort old listeners (if any)
-        if (g.__delphine_abort_controller) {
-            g.__delphine_abort_controller.abort();
+    /*
+    addEventListenerxxx(type: string) {
+            console.log('addEventListener ENTER', { hasBody: !!document.body, hasElem: !!this.elem });
+            const g = window as any;
+
+            // Abort old listeners (if any)
+            if (g.__delphine_abort_controller) {
+                    g.__delphine_abort_controller.abort();
+            }
+            const ac = new AbortController();
+            g.__delphine_abort_controller = ac;
+            const { signal } = ac;
+
+            console.log('Installing global debug listeners (reset+reinstall)');
+
+            const root = this.elem;
+            if (!root) return;
+
+            // Votre handler sur le root
+            if (this.elem) {
+                    // English comments as requested.
+
+                    // English comments as requested.
+
+                    root.addEventListener(
+                            type,
+                            (ev: Event) => {
+                                    const targetElem = ev.target as Element | null;
+                                    if (!targetElem) return;
+
+                                    const form = this.findFormFromEventTarget(targetElem);
+                                    if (!form) {
+                                            console.log('No form resolved; event ignored');
+                                            return;
+                                    }
+
+                                    const evType = ev.type;
+
+                                    // Start from the clicked component (or any component wrapper)
+                                    let t1: Element | null = targetElem.closest('[data-component]');
+                                    while (t1) {
+                                            const handlerName = t1.getAttribute(`data-on${evType}`);
+
+                                            // If we found a handler on this element, dispatch it
+                                            if (handlerName && handlerName !== '') {
+                                                    const name = t1.getAttribute('data-name');
+                                                    const sender = name ? (form.componentRegistry.get(name) ?? null) : null;
+
+                                                    const maybeMethod = (form as any)[handlerName];
+                                                    if (typeof maybeMethod !== 'function') {
+                                                            console.log('NOT A METHOD', handlerName);
+                                                            return;
+                                                    }
+
+                                                    // If sender is missing, fallback to the form itself (safe)
+                                                    (maybeMethod as (this: TForm, sender: any) => any).call(form, sender ?? form);
+                                                    return;
+                                            }
+
+                                            // No handler here: try going "up" using your component tree if possible
+                                            const name = t1.getAttribute('data-name');
+                                            const comp = name ? form.componentRegistry.get(name) : null;
+
+                                            // Prefer your VCL-like parent chain when available
+                                            const next = comp?.parent?.elem ?? null;
+
+                                            // Fallback: standard DOM parent
+                                            t1 = next ?? t1.parentElement?.closest('[data-component]') ?? null;
+                                    }
+
+                                    console.log('Event not handled');
+                            },
+                            true
+                    );
+            }
+    }
+            */
+    onCreate() {
+        //const btn = this.componentRegistry.get('button2');
+        const onShownName = this.elem.getAttribute('data-oncreate');
+        if (onShownName) {
+            queueMicrotask(() => {
+                const fn = this[onShownName];
+                if (typeof fn === 'function')
+                    fn.call(this, null, this);
+            });
         }
-        const ac = new AbortController();
-        g.__delphine_abort_controller = ac;
-        const { signal } = ac;
-        console.log('Installing global debug listeners (reset+reinstall)');
-        const root = this.elem;
-        if (!root)
-            return;
-        // Votre handler sur le root
-        if (this.elem) {
-            // English comments as requested.
-            // English comments as requested.
-            root.addEventListener(type, (ev) => {
-                const targetElem = ev.target;
-                if (!targetElem)
-                    return;
-                const form = this.findFormFromEventTarget(targetElem);
-                if (!form) {
-                    console.log('No form resolved; event ignored');
-                    return;
-                }
-                const evType = ev.type;
-                // Start from the clicked component (or any component wrapper)
-                let t1 = targetElem.closest('[data-component]');
-                while (t1) {
-                    const handlerName = t1.getAttribute(`data-on${evType}`);
-                    // If we found a handler on this element, dispatch it
-                    if (handlerName && handlerName !== '') {
-                        const name = t1.getAttribute('data-name');
-                        const sender = name ? (form.componentRegistry.get(name) ?? null) : null;
-                        const maybeMethod = form[handlerName];
-                        if (typeof maybeMethod !== 'function') {
-                            console.log('NOT A METHOD', handlerName);
-                            return;
-                        }
-                        // If sender is missing, fallback to the form itself (safe)
-                        maybeMethod.call(form, sender ?? form);
-                        return;
-                    }
-                    // No handler here: try going "up" using your component tree if possible
-                    const name = t1.getAttribute('data-name');
-                    const comp = name ? form.componentRegistry.get(name) : null;
-                    // Prefer your VCL-like parent chain when available
-                    const next = comp?.parent?.elem ?? null;
-                    // Fallback: standard DOM parent
-                    t1 = next ?? t1.parentElement?.closest('[data-component]') ?? null;
-                }
-                console.log('Event not handled');
-            }, true);
+        //if (btn) btn.color = TColor.rgb(0, 0, 255);
+    }
+    onShown() {
+        //const btn = this.componentRegistry.get('button3');
+        //if (btn) btn.color = TColor.rgb(0, 255, 255);
+        const onShownName = this.elem.getAttribute('data-onshown');
+        if (onShownName) {
+            queueMicrotask(() => {
+                const fn = this[onShownName];
+                if (typeof fn === 'function')
+                    fn.call(this, null, this);
+            });
         }
     }
 }
@@ -387,7 +561,7 @@ class TButton extends TComponent {
             this.htmlButton().disabled = !enabled;
     }
     constructor(name, form, parent) {
-        super(name, form, parent);
+        super(TMetaButton.metaClass, name, form, parent);
         //super(name, form, parent);
         //this.name = name;
         //this.form = form;
@@ -399,6 +573,13 @@ class TButton extends TComponent {
 }
 exports.TButton = TButton;
 class TMetaButton extends TMetaComponent {
+    constructor() {
+        super();
+    }
+    static metaClass = new TMetaButton();
+    getMetaClass() {
+        return TMetaButton.metaClass;
+    }
     typeName = 'TButton';
     create(name, form, parent) {
         return new TButton(name, form, parent);
@@ -414,6 +595,8 @@ class TMetaButton extends TMetaComponent {
 exports.TMetaButton = TMetaButton;
 class TApplication {
     static TheApplication;
+    //static pluginRegistry = new PluginRegistry();
+    //plugins: IPluginRegistry;
     forms = [];
     types = new ComponentTypeRegistry();
     mainForm = null;
