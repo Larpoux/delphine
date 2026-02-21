@@ -1,14 +1,43 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TApplication = exports.TMetaButton = exports.TButton = exports.TForm = exports.TMetaForm = exports.TDocument = exports.TComponent = exports.ComponentRegistry = exports.TColor = exports.ComponentTypeRegistry = exports.TMetaComponent = void 0;
+exports.TApplication = exports.TMetaButton = exports.TButton = exports.TForm = exports.TMetaForm = exports.TDocument = exports.TComponent = exports.ComponentRegistry = exports.TColor = exports.ComponentTypeRegistry = exports.TMetaComponent = exports.TMetaObject = exports.TObject = exports.TMetaclass = void 0;
 //import { ComponentTypeRegistry } from '../drt/UIPlugin'; // PAS "import type"
 // //import type { Json, DelphineServices, ComponentTypeRegistry } from '../drt/UIPlugin';
 //import { registerVclTypes } from './registerVcl';
 //import { Button } from 'grapesjs';
 const registerVcl_1 = require("./registerVcl");
-// English comments as requested.
-class TMetaComponent {
+class TMetaclass {
+    typeName = 'Metaclass';
+    static metaclass;
     constructor() { }
+}
+exports.TMetaclass = TMetaclass;
+class TObject {
+}
+exports.TObject = TObject;
+class TMetaObject extends TMetaclass {
+    //static metaClass: TMetaObject = new TMetaObject();
+    typeName = 'Object';
+    constructor() {
+        super();
+    }
+}
+exports.TMetaObject = TMetaObject;
+// English comments as requested.
+class TMetaComponent extends TMetaclass {
+    //static metaClass: TMetaComponent<T> = new TMetaComponent<T>();
+    //abstract readonly metaclass: TMetaComponent<T>;
+    constructor() {
+        super();
+    }
+    //abstract getMetaClass(): TMetaComponent<T>;
+    //abstract getMetaClass(): TMetaComponent<T>; //{
+    //return TMetaComponent.metaclass;
+    //}
+    // Create the runtime instance and attach it to the DOM element.
+    create(name, form, parent) {
+        return new TComponent(this.getMetaClass(), name, form, parent);
+    }
     /** Property schema for this component type */
     props() {
         return [];
@@ -308,9 +337,10 @@ class TDocument {
 }
 exports.TDocument = TDocument;
 class TMetaForm extends TMetaComponent {
-    static metaClass = new TMetaForm();
+    //metaclass: TMetaComponent<TForm>;
+    static metaclass = new TMetaForm();
     getMetaClass() {
-        return TMetaForm.metaClass;
+        return TMetaForm.metaclass;
     }
     typeName = 'TForm';
     create(name, form, parent) {
@@ -326,7 +356,7 @@ class TForm extends TComponent {
     _mounted = false;
     componentRegistry = new ComponentRegistry();
     constructor(name) {
-        super(TMetaForm.metaClass, name, null, null);
+        super(TMetaForm.metaclass, name, null, null);
         this.form = this;
         TForm.forms.set(name, this);
         //this.parent = this;

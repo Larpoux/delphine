@@ -65,16 +65,50 @@ export interface DelphineServices {
         // nav?: ...
 }
 
+export abstract class TMetaclass<T extends TMetaclass<any> = any> {
+        readonly typeName: string = 'Metaclass';
+        static metaclass: TMetaclass;
+
+        abstract getMetaClass(): TMetaclass;
+        constructor() {}
+        abstract create(name: string, form: TForm, parent: TObject<any>): T;
+}
+
+export class TObject<TSelf extends TObject<any> = any> {}
+
+export abstract class TMetaObject extends TMetaclass {
+        //static metaClass: TMetaObject = new TMetaObject();
+        readonly typeName: string = 'Object';
+
+        abstract getMetaClass(): TMetaObject;
+        constructor() {
+                super();
+        }
+        abstract create(): TObject;
+
+        //abstract getMetaClass(): TMetaComponent<T>;
+}
+
 // English comments as requested.
-export abstract class TMetaComponent<T extends TComponent = TComponent> {
+export abstract class TMetaComponent<T extends TComponent> extends TMetaclass {
         // The symbolic name used in HTML: data-component="TButton" or "my-button"
         abstract readonly typeName: string;
-        constructor() {}
+        //static metaClass: TMetaComponent<T> = new TMetaComponent<T>();
+        //abstract readonly metaclass: TMetaComponent<T>;
+        constructor() {
+                super();
+        }
 
         abstract getMetaClass(): TMetaComponent<T>;
+        //abstract getMetaClass(): TMetaComponent<T>;
+        //abstract getMetaClass(): TMetaComponent<T>; //{
+        //return TMetaComponent.metaclass;
+        //}
 
         // Create the runtime instance and attach it to the DOM element.
-        abstract create(name: string, form: TForm, parent: TComponent<any>): T;
+        create(name: string, form: TForm, parent: TComponent) {
+                return new TComponent(this.getMetaClass(), name, form, parent);
+        }
 
         /** Property schema for this component type */
         props(): PropSpec<T>[] {
@@ -106,9 +140,9 @@ export abstract class TMetaComponent<T extends TComponent = TComponent> {
 
 export class ComponentTypeRegistry {
         // We store heterogeneous metas, so we keep them as TMetaComponent<any>.
-        private readonly classes = new Map<string, TMetaComponent<any>>();
+        private readonly classes = new Map<string, TMetaComponent<TComponent>>();
 
-        register<T extends TComponent>(meta: TMetaComponent<T>) {
+        register(meta: TMetaComponent<any>) {
                 if (this.classes.has(meta.typeName)) {
                         throw new Error(`Component type already registered: ${meta.typeName}`);
                 }
@@ -116,7 +150,7 @@ export class ComponentTypeRegistry {
         }
 
         // If you just need "something meta", return any-meta.
-        get(typeName: string): TMetaComponent<any> | undefined {
+        get(typeName: string): TMetaComponent<TComponent> | undefined {
                 return this.classes.get(typeName);
         }
 
@@ -226,7 +260,7 @@ export class ComponentRegistry {
                 return document.body ?? document.documentElement;
         }
 
-        private readProps(el: Element, meta: TMetaComponent<any>) {
+        private readProps(el: Element, meta: TMetaComponent<TComponent>) {
                 const out: Record<string, any> = {};
                 for (const spec of meta.props()) {
                         const raw = el.getAttribute(`data-${spec.name}`);
@@ -250,7 +284,7 @@ export class ComponentRegistry {
                 }
         }
 
-        applyProps(child: TComponent, cls: TMetaComponent) {
+        applyProps(child: TComponent, cls: TMetaComponent<TComponent>) {
                 const props = this.readProps(child.elem!, cls);
                 for (const spec of cls.props()) {
                         if (props[spec.name] !== undefined) {
@@ -345,10 +379,10 @@ export class ComponentRegistry {
         }
 }
 
-export class TComponent<TSelf extends TComponent<any> = any> {
-        readonly metaClass: TMetaComponent<TSelf>;
+export class TComponent {
+        readonly metaClass: TMetaComponent<any>;
         readonly name: string;
-        readonly parent: TComponent<any> | null = null;
+        readonly parent: TComponent | null = null;
         form: TForm | null = null;
         children: TComponent[] = [];
 
@@ -356,7 +390,7 @@ export class TComponent<TSelf extends TComponent<any> = any> {
         get htmlElement(): HTMLElement | null {
                 return this.elem as HTMLElement | null;
         }
-        constructor(metaClass: TMetaComponent<TSelf>, name: string, form: TForm | null, parent: TComponent | null) {
+        constructor(metaClass: TMetaComponent<any>, name: string, form: TForm | null, parent: TComponent | null) {
                 this.metaClass = metaClass;
                 this.name = name;
                 this.parent = parent;
@@ -433,9 +467,10 @@ export class TDocument {
 }
 
 export class TMetaForm extends TMetaComponent<TForm> {
-        static metaClass: TMetaForm = new TMetaForm();
+        //metaclass: TMetaComponent<TForm>;
+        static metaclass: TMetaForm = new TMetaForm();
         getMetaClass() {
-                return TMetaForm.metaClass;
+                return TMetaForm.metaclass;
         }
         readonly typeName = 'TForm';
 
@@ -453,7 +488,7 @@ export class TForm extends TComponent {
         private _mounted = false;
         componentRegistry: ComponentRegistry = new ComponentRegistry();
         constructor(name: string) {
-                super(TMetaForm.metaClass, name, null, null);
+                super(TMetaForm.metaclass, name, null, null);
                 this.form = this;
                 TForm.forms.set(name, this);
                 //this.parent = this;
@@ -681,7 +716,7 @@ export class TForm extends TComponent {
         }
 }
 
-export class TButton extends TComponent<TButton> {
+export class TButton extends TComponent {
         private _caption: string = '';
 
         htmlButton(): HTMLButtonElement {
@@ -728,12 +763,12 @@ export class TMetaButton extends TMetaComponent<TButton> {
                 super();
         }
         static metaClass: TMetaButton = new TMetaButton();
-        getMetaClass(): TMetaComponent<TButton> {
+        getMetaClass(): TMetaButton {
                 return TMetaButton.metaClass;
         }
         readonly typeName = 'TButton';
 
-        create(name: string, form: TForm, parent: TComponent<any>) {
+        create(name: string, form: TForm, parent: TComponent) {
                 return new TButton(name, form, parent);
         }
 
