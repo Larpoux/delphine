@@ -1,0 +1,1 @@
+{"version":3,"file":"registerVcl.js","sourceRoot":"","sources":["../../src/vcl/registerVcl.ts"],"names":[],"mappings":";AAAA,iCAAiC;;AAOjC,4CAKC;AAVD,+CAA+C;AAC/C,+BAAuH;AACvH,8EAA8E;AAE9E,iCAAiC;AACjC,SAAgB,gBAAgB,CAAC,KAA4B;IACrD,KAAK,CAAC,QAAQ,CAAC,kBAAW,CAAC,SAAS,CAAC,CAAC;IACtC,KAAK,CAAC,QAAQ,CAAC,sBAAe,CAAC,SAAS,CAAC,CAAC;IAC1C,8BAA8B;IAC9B,+BAA+B;AACvC,CAAC"}

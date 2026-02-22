@@ -2,11 +2,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+echo "=== clean ==="
 rm -rf out
-#npm run compile
+
+echo "=== build: vscode extension ==="
 npx tsc -p src/extension/tsconfig.extension.json
 
-echo "***** zaza *****"
+echo "=== build: webview boots ==="
+npx tsc --project src/tsconfig.web.json
+
+echo "=== build: example zaza (esbuild) ==="
 npx esbuild examples/zaza/zaza.ts \
   --bundle \
   --format=esm \
@@ -17,13 +22,28 @@ npx esbuild examples/zaza/zaza.ts \
   --alias:@drt=src/drt \
   --outfile=media/zaza.compiled.js
 
-echo "***** boots *****"
-npx tsc --project src/tsconfig.web.json
+echo "=== build: example zazaVue (vite) ==="
+pushd examples/zazaVue >/dev/null
 
-#echo "***** bootPreview *****"
-#npx tsc --project src/tsconfig.web.json
+# Installe si nécessaire (utile si vous nettoyez node_modules parfois)
+if [ ! -d node_modules ]; then
+  npm install
+fi
 
-#npx tsc src/webview/bootPreview.ts \
-#  --project src/tsconfig.web.json \
-#  --outDir media \
-#  --noEmitOnError
+npm run build
+cp -f dist/zazaVue.compiled.js ../../media/zazaVue.compiled.js
+
+#
+# Récupérer l'entry JS depuis dist/manifest.json
+
+node - <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+
+NODE
+
+
+popd >/dev/null
+
+echo "=== done ==="

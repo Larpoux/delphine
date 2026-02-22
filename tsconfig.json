@@ -17,6 +17,21 @@
                         "@drt/*": ["src/drt/*"]
                 }
         },
-        "include": ["src/**/*.ts", "examples/**/*.ts", "media/**/*.d.ts"],
-        "exclude": ["node_modules", "out", "media"]
+        "include": ["src/**/*.ts", "media/**/*.d.ts"],
+        "exclude": [
+                "node_modules",
+                "out",
+                "media",
+
+                // ✅ IMPORTANT: do not typecheck Vite configs with the root CJS tsconfig
+                "examples/**/vite.config.*",
+                "examples/**/vitest.config.*",
+                "examples/**/cypress.config.*",
+                "examples/**/playwright.config.*",
+                "examples/**/eslint.config.*",
+
+                // optional: keep the Vue example isolated
+                "examples/**/node_modules",
+                "examples/**/dist"
+        ]
 }

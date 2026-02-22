@@ -98,6 +98,8 @@ function installListenersOnce() {
 
 function main() {
         // Avoid running too early if DOM isn’t ready yet.
+        console.log('BOOTPREVIEW EXECUTED');
+        debugger;
         const start = Date.now();
         const retryEveryMs = 50;
         const maxWaitMs = 1500;

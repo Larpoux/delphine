@@ -1,11 +1,24 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "CommonJS",
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022", "DOM"],
     "outDir": "out",
     "rootDir": "src",
+    "strict": true,
     "sourceMap": true,
-    "strict": true
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@vcl": ["src/vcl/index.ts"],
+      "@vcl/*": ["src/vcl/*"],
+      "@drt": ["src/drt/index.ts"],
+      "@drt/*": ["src/drt/*"]
+    }
   },
-  "include": ["src/extension.ts"]
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts", "media/**/*.d.ts"],
+  "exclude": ["examples/**/*", "out/**/*", "node_modules/**/*"]
+
 }

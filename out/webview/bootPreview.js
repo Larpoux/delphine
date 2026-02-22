@@ -1,3 +1,5 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 console.log('[boot] starting, grapesjs=', window.grapesjs);
 function tryAcquireVsCodeApi() {
     try {
@@ -105,4 +107,4 @@ if (document.readyState === 'loading') {
 else {
     main();
 }
-export {};
+//# sourceMappingURL=bootPreview.js.map
