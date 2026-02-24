@@ -4,7 +4,7 @@ import type { DelphineServices, UIPluginInstance } from '@vcl'
 
 export function createHelloVuePlugin(): UIPluginInstance<{ message: string }> {
   let app: ReturnType<typeof createApp> | null = null
-  const state = reactive<{ message: string }>({ message: '' })
+  const state = reactive<{ message: string }>({ message: 'BOBO' })
 
   return {
     id: 'hello-vue',

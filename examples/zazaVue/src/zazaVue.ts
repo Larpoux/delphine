@@ -53,12 +53,12 @@ const runtime = {
 */
 
   protected onMyCreate(_ev: Event | null, _sender: TComponent) {
-    const btn = this.componentRegistry.get('button2')
+    const btn = this.componentRegistry.get('button1')
     if (btn) btn.color = TColor.rgb(0, 0, 255)
   }
 
   protected onMyShown(_ev: Event | null, _sender: TComponent) {
-    const btn = this.componentRegistry.get('button3')
+    const btn = this.componentRegistry.get('buttonx')
     if (btn) btn.color = TColor.rgb(0, 255, 255)
   }
 
@@ -77,7 +77,7 @@ const runtime = {
   zaza_onclick(_ev: Event | null, _sender: TComponent) {
     const btn = this.componentRegistry.get<TButton>('buttonx')
     btn!.color = TColor.rgb(0, 255, 0)
-    console.log('zaza clicked!!!!')
+    console.log('zazaVue clicked!!!!')
     //btn!.enabled = false;
   }
 

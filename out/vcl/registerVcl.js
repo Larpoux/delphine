@@ -7,7 +7,7 @@ const _vcl_1 = require("@vcl");
 //import { TMetaPluginHost } from '../drt/UIPlugin'; // NOT GOOD ! import VCL!
 // English comments as requested.
 function registerBuiltins(types) {
-    types.register(_vcl_1.TMetaButton.metaClass);
+    types.register(_vcl_1.TMetaButton.metaclass);
     types.register(_vcl_1.TMetaPluginHost.metaClass);
     // types.register(TEditClass);
     // types.register(TLabelClass);

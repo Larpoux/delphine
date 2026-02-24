@@ -2,6 +2,8 @@
 console.log('I AM ZAZA');
 //import { installDelphineRuntime } from "./src/drt"; // <-- TS, pas .js
 import { TForm, TColor, TApplication, TComponent, TButton } from '@vcl';
+import { test } from './test';
+
 //import { ComponentTypeRegistry } from '@vcl/StdCtrls';
 //import { ComponentRegistry } from '@drt/ComponentRegistry';
 //import { TPluginHost } from '@drt/UIPlugin';
@@ -96,4 +98,5 @@ class MyApplication extends TApplication {
 } // class MyApplication
 
 const myApplication: MyApplication = new MyApplication();
+test();
 myApplication.run();

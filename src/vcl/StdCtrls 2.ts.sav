@@ -125,7 +125,12 @@ export class TMetaComponent extends TMetaclass {
                 return new TComponent(name, form, parent);
         }
 
-        //domEvents?(): string[]; // default [];
+        /** Property schema for this component type */
+        props(): PropSpec<TComponent>[] {
+                return [];
+        }
+
+        domEvents?(): string[]; // default [];
 
         /*
         // Optional: parse HTML attributes -> props/state
@@ -143,62 +148,7 @@ export class TMetaComponent extends TMetaclass {
                 // property schema could live here
         };
         */
-        props(): PropSpec<any>[] {
-                return [
-                        { name: 'color', kind: 'color', apply: (o, v) => (o.color = new TColor(String(v))) },
-                        { name: 'onclick', kind: 'handler', apply: (o, v) => (o.onclick = new THandler(String(v))) },
-                        { name: 'oncreate', kind: 'handler', apply: (o, v) => (o.oncreate = new THandler(String(v))) }
-                ];
-        }
-        // Parse HTML attributes into a plain object
-        parsePropsFromElement(el: Element): Record<string, unknown> {
-                const out: Record<string, unknown> = {};
-
-                // 1) JSON bulk
-                const raw = el.getAttribute('data-props');
-                if (raw) {
-                        try {
-                                Object.assign(out, JSON.parse(raw));
-                        } catch (e) {
-                                console.error('Invalid JSON in data-props', raw, e);
-                        }
-                }
-
-                // 2) Whitelist: only declared props override / complement
-                for (const p of this.props()) {
-                        const attr = el.getAttribute(`data-${p.name}`);
-                        if (attr !== null) out[p.name] = attr;
-                }
-
-                return out;
-        }
-
-        applyProps(obj: any, values: Record<string, unknown>) {
-                for (const p of this.props()) {
-                        if (Object.prototype.hasOwnProperty.call(values, p.name)) {
-                                p.apply(obj, values[p.name]);
-                        }
-                }
-        }
-
-        applyPropsFromElement(obj: any, el: Element) {
-                const props = this.parsePropsFromElement(el);
-                this.applyProps(obj, props);
-                return props;
-        }
-        // Apply parsed props to the component instance
-
-        domEvents?(): string[]; // default [];
 }
-
-type ComponentProps = {
-        onclick?: THandler;
-        oncreate?: THandler;
-        color?: TColor; // ou TColor, etc.
-        name?: string;
-        component?: string;
-        enabled?: boolean;
-};
 
 export class TComponent {
         getMetaclass(): TMetaComponent {
@@ -221,8 +171,6 @@ export class TComponent {
                 this.form = form;
                 this.name = name;
         }
-
-        declare props: ComponentProps;
 
         /** May contain child components */
         allowsChildren(): boolean {
@@ -332,14 +280,6 @@ export class TColor {
         }
         /* factory */ static rgba(r: number, g: number, b: number, a: number): TColor {
                 return new TColor(`rgba(${r}, ${g}, ${b}, ${a})`);
-        }
-}
-
-export class THandler {
-        s: string;
-
-        constructor(s: string) {
-                this.s = s;
         }
 }
 
@@ -481,10 +421,6 @@ export class TComponentRegistry extends TObject {
                         //child.form = form;
                         //child.name = name!;
                         // Optional props
-                        const props = cls.applyPropsFromElement(child, el);
-                        child.props = props;
-                        (child as any).onAttachedToDom?.();
-
                         this.applyProps(child, cls);
                         this.registerInstance(name!, child);
                         component.children.push(child);
@@ -547,9 +483,11 @@ export class TMetaForm extends TMetaComponent {
                 return new TForm(name);
         }
 
+        /*
         props(): PropSpec<TForm>[] {
                 return [];
         }
+                */
 }
 
 export class TForm extends TComponent {
@@ -753,6 +691,7 @@ export class TMetaButton extends TMetaComponent {
                 return new TButton(name, form, parent);
         }
 
+        /*
         props(): PropSpec<TButton>[] {
                 return [
                         { name: 'caption', kind: 'string', apply: (o, v) => (o.caption = String(v)) },
@@ -760,6 +699,7 @@ export class TMetaButton extends TMetaComponent {
                         { name: 'color', kind: 'color', apply: (o, v) => (o.color = v as any) }
                 ];
         }
+                */
 }
 
 export class TMetaApplication extends TMetaclass {
@@ -866,9 +806,9 @@ export class TMetaPluginHost extends TMetaComponent {
                 return new TPluginHost(name, form, parent);
         }
 
-        props(): PropSpec<TPluginHost>[] {
-                return [];
-        }
+        //props(): PropSpec<TPluginHost>[] {
+        //       return [];
+        //}
 }
 
 export class TPluginHost extends TComponent {
