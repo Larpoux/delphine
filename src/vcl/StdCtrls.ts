@@ -1,5 +1,12 @@
 import { registerBuiltins } from './registerVcl';
 
+/*
+   To create a new component type:
+
+   To create a new component attribut
+
+*/
+
 export type ComponentFactory = (name: string, form: TForm, owner: TComponent) => TComponent;
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -143,7 +150,7 @@ export class TMetaComponent extends TMetaclass {
                 // property schema could live here
         };
         */
-        props(): PropSpec<any>[] {
+        defProps(): PropSpec<any>[] {
                 return [
                         { name: 'color', kind: 'color', apply: (o, v) => (o.color = new TColor(String(v))) },
                         { name: 'onclick', kind: 'handler', apply: (o, v) => (o.onclick = new THandler(String(v))) },
@@ -165,7 +172,7 @@ export class TMetaComponent extends TMetaclass {
                 }
 
                 // 2) Whitelist: only declared props override / complement
-                for (const p of this.props()) {
+                for (const p of this.defProps()) {
                         const attr = el.getAttribute(`data-${p.name}`);
                         if (attr !== null) out[p.name] = attr;
                 }
@@ -174,18 +181,20 @@ export class TMetaComponent extends TMetaclass {
         }
 
         applyProps(obj: any, values: Record<string, unknown>) {
-                for (const p of this.props()) {
+                for (const p of this.defProps()) {
                         if (Object.prototype.hasOwnProperty.call(values, p.name)) {
                                 p.apply(obj, values[p.name]);
                         }
                 }
         }
 
+        /*
         applyPropsFromElement(obj: any, el: Element) {
                 const props = this.parsePropsFromElement(el);
                 this.applyProps(obj, props);
                 return props;
         }
+                */
         // Apply parsed props to the component instance
 
         domEvents?(): string[]; // default [];
@@ -422,7 +431,7 @@ export class TComponentRegistry extends TObject {
 
         private readProps(el: Element, meta: TMetaComponent) {
                 const out: Record<string, any> = {};
-                for (const spec of meta.props()) {
+                for (const spec of meta.defProps()) {
                         const raw = el.getAttribute(`data-${spec.name}`);
                         if (raw == null) continue;
 
@@ -446,7 +455,7 @@ export class TComponentRegistry extends TObject {
 
         applyProps(child: TComponent, cls: TMetaComponent) {
                 const props = this.readProps(child.elem!, cls);
-                for (const spec of cls.props()) {
+                for (const spec of cls.defProps()) {
                         if (props[spec.name] !== undefined) {
                                 spec.apply(child, props[spec.name]);
                         }
@@ -481,8 +490,11 @@ export class TComponentRegistry extends TObject {
                         //child.form = form;
                         //child.name = name!;
                         // Optional props
-                        const props = cls.applyPropsFromElement(child, el);
-                        child.props = props;
+                        child.props = cls.parsePropsFromElement(el);
+                        this.applyProps(child, cls);
+
+                        //const props = cls.applyPropsFromElement(child, el);
+                        //child.props = props;
                         (child as any).onAttachedToDom?.();
 
                         this.applyProps(child, cls);
@@ -697,41 +709,50 @@ export class TForm extends TComponent {
         }
 }
 
+type ButtonProps = ComponentProps & {
+        caption?: string;
+        enabled?: boolean;
+        //color?: TColor; // ou TColor, etc.
+};
+
 export class TButton extends TComponent {
         getMetaclass() {
                 return TMetaButton.metaclass;
         }
-        private _caption: string = '';
 
         htmlButton(): HTMLButtonElement {
                 return this.htmlElement! as HTMLButtonElement;
         }
 
-        get caption() {
-                return this._caption;
-        }
-        set caption(caption) {
-                this.setCaption(caption);
-        }
-        setCaption(s: string) {
-                this._caption = s;
-                if (this.htmlElement) this.htmlElement.textContent = s;
+        protected get bprops(): ButtonProps {
+                return this.props as ButtonProps;
         }
 
-        private _enabled: boolean = true;
-        get enabled() {
-                return this._enabled;
+        get caption(): string {
+                return this.bprops.caption ?? '';
+        }
+        set caption(caption: string) {
+                this.bprops.caption = caption;
+                this.syncDomFromProps();
+        }
+
+        get enabled(): boolean {
+                return this.props.enabled ?? true;
         }
         set enabled(enabled) {
-                this.setEnabled(enabled);
-        }
-        setEnabled(enabled: boolean) {
-                this._enabled = enabled;
-                if (this.htmlElement) this.htmlButton().disabled = !enabled;
+                this.props.enabled = enabled;
+                this.syncDomFromProps();
         }
 
         constructor(name: string, form: TForm, parent: TComponent) {
                 super(name, form, parent);
+        }
+        syncDomFromProps() {
+                const el = this.htmlElement;
+                if (!el) return;
+
+                el.textContent = this.caption;
+                this.htmlButton().disabled = !this.enabled;
         }
 }
 
@@ -741,7 +762,7 @@ export class TMetaButton extends TMetaComponent {
         protected constructor(superClass: TMetaComponent) {
                 super(superClass);
                 // et vous changez juste le nom :
-                (this as any).typeName = 'TestB';
+                (this as any).typeName = 'TButton';
         }
         getMetaclass(): TMetaButton {
                 return TMetaButton.metaclass;

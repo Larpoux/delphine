@@ -27,10 +27,24 @@
                         }
                 </style>
         </head>
-        <body data-component="TForm" id="ir9k" data-name="zaza" data-onclick="zaza_onclick" data-oncreate="onMyCreate" data-onshown="onMyShown">
-               <Button data-component="TButton" data-caption='button1 caption' data-name="button1" data-onclick="button1_onclick" data-color="default"> toto</Button>
-                      <Button data-component="TButton" data-caption='buttonx caption' data-name="buttonx"  data-color="default">Click Me</button>
-                <h1 id="igfu">Mon titreX</h1>
+        <body data-component="TForm" data-props='{
+    "color": "rgb(255,255,0)",
+    "onclick": "zaza_onclick"
+  }' id="ir9k" data-name="zaza" 
+  data-onclick="zaza_onclick" data-oncreate="onMyCreate" data-onshown="onMyShown">
+
+               <Button data-component="TButton"  data-props='{
+    "color": "rgb(255,255,0)",
+    "onclick": "button1_onclick",
+    "caption": "Delphine button1 caption"
+    "enabled": true,
+    "name": "button1"
+  }' data-name="button1" data-onclick="button1_onclick"> toto</Button>
+
+<Button data-component="TButton" data-caption='Delphine buttonx caption' data-name="buttonx"  data-color="rgb(0, 255, 255)">Click Me</button>
+
+<h1 id="igfu">Mon titreX</h1>
+
 <div
   data-name="myvueplugin"
   data-component="TPluginHost"
@@ -38,7 +52,7 @@
   data-message="Bonjour depuis Delphine"
     data-props='{
     "message": "Hello depuis Delphine",
-    "color": "red",
+    "color": "rgb(255,255,0)",
     "count": 3,
     "enabled": true
   }'>

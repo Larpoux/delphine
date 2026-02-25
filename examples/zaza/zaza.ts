@@ -63,7 +63,7 @@ const runtime = {
                 }
                 //btn.color = TColor.rgb(0, 0, 255);
                 btn!.color = TColor.rgb(255, 0, 0);
-                btn!.setCaption('MIMI');
+                btn!.caption = 'MIMI';
                 console.log('Button1 clicked!!!!');
         }
 

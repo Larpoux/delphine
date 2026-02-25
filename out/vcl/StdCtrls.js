@@ -58,7 +58,7 @@ class TMetaComponent extends TMetaclass {
             // property schema could live here
     };
     */
-    props() {
+    defProps() {
         return [
             { name: 'color', kind: 'color', apply: (o, v) => (o.color = new TColor(String(v))) },
             { name: 'onclick', kind: 'handler', apply: (o, v) => (o.onclick = new THandler(String(v))) },
@@ -79,7 +79,7 @@ class TMetaComponent extends TMetaclass {
             }
         }
         // 2) Whitelist: only declared props override / complement
-        for (const p of this.props()) {
+        for (const p of this.defProps()) {
             const attr = el.getAttribute(`data-${p.name}`);
             if (attr !== null)
                 out[p.name] = attr;
@@ -87,16 +87,11 @@ class TMetaComponent extends TMetaclass {
         return out;
     }
     applyProps(obj, values) {
-        for (const p of this.props()) {
+        for (const p of this.defProps()) {
             if (Object.prototype.hasOwnProperty.call(values, p.name)) {
                 p.apply(obj, values[p.name]);
             }
         }
-    }
-    applyPropsFromElement(obj, el) {
-        const props = this.parsePropsFromElement(el);
-        this.applyProps(obj, props);
-        return props;
     }
 }
 exports.TMetaComponent = TMetaComponent;
@@ -291,7 +286,7 @@ class TComponentRegistry extends TObject {
     }
     readProps(el, meta) {
         const out = {};
-        for (const spec of meta.props()) {
+        for (const spec of meta.defProps()) {
             const raw = el.getAttribute(`data-${spec.name}`);
             if (raw == null)
                 continue;
@@ -313,7 +308,7 @@ class TComponentRegistry extends TObject {
     }
     applyProps(child, cls) {
         const props = this.readProps(child.elem, cls);
-        for (const spec of cls.props()) {
+        for (const spec of cls.defProps()) {
             if (props[spec.name] !== undefined) {
                 spec.apply(child, props[spec.name]);
             }
@@ -344,8 +339,10 @@ class TComponentRegistry extends TObject {
             //child.form = form;
             //child.name = name!;
             // Optional props
-            const props = cls.applyPropsFromElement(child, el);
-            child.props = props;
+            child.props = cls.parsePropsFromElement(el);
+            this.applyProps(child, cls);
+            //const props = cls.applyPropsFromElement(child, el);
+            //child.props = props;
             child.onAttachedToDom?.();
             this.applyProps(child, cls);
             this.registerInstance(name, child);
@@ -536,35 +533,35 @@ class TButton extends TComponent {
     getMetaclass() {
         return TMetaButton.metaclass;
     }
-    _caption = '';
     htmlButton() {
         return this.htmlElement;
     }
+    get bprops() {
+        return this.props;
+    }
     get caption() {
-        return this._caption;
+        return this.bprops.caption ?? '';
     }
     set caption(caption) {
-        this.setCaption(caption);
+        this.bprops.caption = caption;
+        this.syncDomFromProps();
     }
-    setCaption(s) {
-        this._caption = s;
-        if (this.htmlElement)
-            this.htmlElement.textContent = s;
-    }
-    _enabled = true;
     get enabled() {
-        return this._enabled;
+        return this.props.enabled ?? true;
     }
     set enabled(enabled) {
-        this.setEnabled(enabled);
-    }
-    setEnabled(enabled) {
-        this._enabled = enabled;
-        if (this.htmlElement)
-            this.htmlButton().disabled = !enabled;
+        this.props.enabled = enabled;
+        this.syncDomFromProps();
     }
     constructor(name, form, parent) {
         super(name, form, parent);
+    }
+    syncDomFromProps() {
+        const el = this.htmlElement;
+        if (!el)
+            return;
+        el.textContent = this.caption;
+        this.htmlButton().disabled = !this.enabled;
     }
 }
 exports.TButton = TButton;
@@ -573,7 +570,7 @@ class TMetaButton extends TMetaComponent {
     constructor(superClass) {
         super(superClass);
         // et vous changez juste le nom :
-        this.typeName = 'TestB';
+        this.typeName = 'TButton';
     }
     getMetaclass() {
         return TMetaButton.metaclass;
