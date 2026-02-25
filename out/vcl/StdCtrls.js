@@ -41,6 +41,7 @@ class TMetaComponent extends TMetaclass {
     create(name, form, parent) {
         return new TComponent(name, form, parent);
     }
+    //allDefPropsCollected: PropSpec<any>[] = [];
     //domEvents?(): string[]; // default [];
     /*
     // Optional: parse HTML attributes -> props/state
@@ -61,40 +62,13 @@ class TMetaComponent extends TMetaclass {
     defProps() {
         return [
             { name: 'color', kind: 'color', apply: (o, v) => (o.color = new TColor(String(v))) },
-            { name: 'onclick', kind: 'handler', apply: (o, v) => (o.onclick = new THandler(String(v))) },
-            { name: 'oncreate', kind: 'handler', apply: (o, v) => (o.oncreate = new THandler(String(v))) }
+            { name: 'onclick', kind: 'handler', apply: (o, v) => (o.onclick = new THandler(String(v))) }
+            //{ name: 'oncreate', kind: 'handler', apply: (o, v) => (o.oncreate = new THandler(String(v))) }
         ];
-    }
-    // Parse HTML attributes into a plain object
-    parsePropsFromElement(el) {
-        const out = {};
-        // 1) JSON bulk
-        const raw = el.getAttribute('data-props');
-        if (raw) {
-            try {
-                Object.assign(out, JSON.parse(raw));
-            }
-            catch (e) {
-                console.error('Invalid JSON in data-props', raw, e);
-            }
-        }
-        // 2) Whitelist: only declared props override / complement
-        for (const p of this.defProps()) {
-            const attr = el.getAttribute(`data-${p.name}`);
-            if (attr !== null)
-                out[p.name] = attr;
-        }
-        return out;
-    }
-    applyProps(obj, values) {
-        for (const p of this.defProps()) {
-            if (Object.prototype.hasOwnProperty.call(values, p.name)) {
-                p.apply(obj, values[p.name]);
-            }
-        }
     }
 }
 exports.TMetaComponent = TMetaComponent;
+//type RawProp = Record<string, string>;
 class TComponent {
     getMetaclass() {
         return TMetaComponent.metaclass;
@@ -114,15 +88,32 @@ class TComponent {
         this.form = form;
         this.name = name;
     }
+    //rawProps: RawProp[] = [];
     /** May contain child components */
     allowsChildren() {
         return false;
     }
     get color() {
-        return new TColor(this.getStyleProp('color'));
+        return this.props.color ?? new TColor('default');
     }
-    set color(v) {
-        this.setStyleProp('color', v.s);
+    set color(color) {
+        this.props.color = color;
+        const el = this.htmlElement;
+        if (!el)
+            return;
+        this.setStyleProp('color', this.color.s);
+    }
+    get onclick() {
+        return this.props.onclick ?? new THandler('');
+    }
+    set onclick(handler) {
+        this.props.onclick = handler;
+    }
+    syncDomFromProps() {
+        const el = this.htmlElement;
+        if (!el)
+            return;
+        this.setStyleProp('color', this.color.s);
     }
     get backgroundColor() {
         return new TColor(this.getStyleProp('background-color'));
@@ -284,36 +275,75 @@ class TComponentRegistry extends TObject {
         // Last resort.
         return document.body ?? document.documentElement;
     }
-    readProps(el, meta) {
-        const out = {};
-        for (const spec of meta.defProps()) {
-            const raw = el.getAttribute(`data-${spec.name}`);
-            if (raw == null)
-                continue;
-            out[spec.name] = this.convert(raw, spec.kind);
-        }
-        return out;
-    }
     convert(raw, kind) {
-        switch (kind) {
-            case 'string':
-                return raw;
-            case 'number':
-                return Number(raw);
-            case 'boolean':
-                return raw === 'true' || raw === '1' || raw === '';
-            case 'color':
-                return raw; // ou parse en TColor si vous avez
-        }
-    }
-    applyProps(child, cls) {
-        const props = this.readProps(child.elem, cls);
-        for (const spec of cls.defProps()) {
-            if (props[spec.name] !== undefined) {
-                spec.apply(child, props[spec.name]);
+        if (typeof raw === 'string') {
+            switch (kind) {
+                case 'string':
+                    return raw;
+                case 'number':
+                    return Number(raw);
+                case 'boolean':
+                    return raw === 'true' || raw === '1' || raw === '';
+                case 'color':
+                    return new TColor(raw); // ou parse en TColor si vous avez
             }
         }
     }
+    // Parse HTML attributes into a plain object
+    // This function is called juste once, in buildComponentTree(), after the Form is created.
+    parsePropsFromElement(el, defProps) {
+        const out = {};
+        // 1) JSON bulk
+        const raw = el.getAttribute('data-props');
+        if (raw) {
+            try {
+                const r = raw ? JSON.parse(raw) : {};
+                //for (const p of props()) {
+                for (const spec of defProps) {
+                    const v = r[spec.name];
+                    if (v != undefined && v != null) {
+                        const value = this.convert(v, spec.kind);
+                        out[spec.name] = value; // This is done by spec.apply()
+                        //spec.apply(out, v);
+                    }
+                }
+                //}
+            }
+            catch (e) {
+                console.error('Invalid JSON in data-props', raw, e);
+            }
+        }
+        // 2) Whitelist: only declared props override / complement
+        //const defProps = this.collectDefProps();
+        for (const p of defProps) {
+            const attr = el.getAttribute(`data-${p.name}`);
+            if (attr !== null) {
+                const x = this.convert(attr, p.kind);
+                out[p.name] = x;
+            }
+        }
+        return out;
+    }
+    collectDefProps(comp) {
+        const out = [];
+        const seen = new Set();
+        // Walk up metaclass inheritance: this -> super -> super...
+        let mc = comp;
+        while (mc) {
+            if (typeof mc.defProps === 'function') {
+                for (const spec of mc.defProps()) {
+                    // Child overrides parent if same name.
+                    if (!seen.has(spec.name)) {
+                        out.push(spec);
+                        seen.add(spec.name);
+                    }
+                }
+            }
+            mc = mc.superClass ?? null;
+        }
+        return out;
+    }
+    // This function is called juste once, in buildComponentTree(), when the form is created
     buildComponentTree(form, component) {
         this.clear();
         // --- FORM ---
@@ -339,12 +369,50 @@ class TComponentRegistry extends TObject {
             //child.form = form;
             //child.name = name!;
             // Optional props
-            child.props = cls.parsePropsFromElement(el);
+            // We collect
+            const allDefPropsCollected = this.collectDefProps(cls); // This is done during runtime, but could be done at compiletime
+            child.props = this.parsePropsFromElement(el, allDefPropsCollected);
+            child.syncDomFromProps();
+            //const rawProps = child.rawProps;
+            //child.props = new Object();
+            //for (const props in child.props) {
+            /*
+            for (const spec of cls.allDefPropsCollected) {
+                    const specName : string = spec.name;
+                    const value  = rawProps[specName];
+                   
+                    //if (spec.name == props[spec.name]) {
+                            //spec.apply(child, this.convert(props[spec.name], spec.kind));
+
+                            if (value !== undefined) {
+                                    child.props[propName] =  this.convert(value, spec.kind);
+                                    spec.apply(child, child.props[propName] );
+                            }
+                    }
+            }
+            //}
+
+            for (const spec of cls.allDefPropsCollected) {
+                    if (props[spec.name] !== undefined) {
+                            spec.apply(child, props[spec.name]);
+                    }
+            }
+
+            for (const props in child.props) {
+                    for (const spec of cls.defProps()) {
+                            if (props[spec.name] !== undefined) {
+                                    spec.apply(child, props[spec.name]);
+                            }
+                    }
+            }
+                    
+
             this.applyProps(child, cls);
+            */
             //const props = cls.applyPropsFromElement(child, el);
             //child.props = props;
             child.onAttachedToDom?.();
-            this.applyProps(child, cls);
+            //this.applyProps(child, cls);
             this.registerInstance(name, child);
             component.children.push(child);
             const maybeHost = child;
@@ -544,14 +612,17 @@ class TButton extends TComponent {
     }
     set caption(caption) {
         this.bprops.caption = caption;
-        this.syncDomFromProps();
+        const el = this.htmlElement;
+        if (!el)
+            return;
+        el.textContent = this.caption;
     }
     get enabled() {
-        return this.props.enabled ?? true;
+        return this.bprops.enabled ?? true;
     }
     set enabled(enabled) {
-        this.props.enabled = enabled;
-        this.syncDomFromProps();
+        this.bprops.enabled = enabled;
+        this.htmlButton().disabled = !enabled;
     }
     constructor(name, form, parent) {
         super(name, form, parent);
@@ -562,6 +633,7 @@ class TButton extends TComponent {
             return;
         el.textContent = this.caption;
         this.htmlButton().disabled = !this.enabled;
+        super.syncDomFromProps();
     }
 }
 exports.TButton = TButton;
@@ -579,11 +651,10 @@ class TMetaButton extends TMetaComponent {
     create(name, form, parent) {
         return new TButton(name, form, parent);
     }
-    props() {
+    defProps() {
         return [
             { name: 'caption', kind: 'string', apply: (o, v) => (o.caption = String(v)) },
-            { name: 'enabled', kind: 'boolean', apply: (o, v) => (o.enabled = Boolean(v)) },
-            { name: 'color', kind: 'color', apply: (o, v) => (o.color = v) }
+            { name: 'enabled', kind: 'boolean', apply: (o, v) => (o.enabled = Boolean(v)) }
         ];
     }
 }

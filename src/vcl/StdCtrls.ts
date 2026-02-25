@@ -132,6 +132,7 @@ export class TMetaComponent extends TMetaclass {
                 return new TComponent(name, form, parent);
         }
 
+        //allDefPropsCollected: PropSpec<any>[] = [];
         //domEvents?(): string[]; // default [];
 
         /*
@@ -153,33 +154,12 @@ export class TMetaComponent extends TMetaclass {
         defProps(): PropSpec<any>[] {
                 return [
                         { name: 'color', kind: 'color', apply: (o, v) => (o.color = new TColor(String(v))) },
-                        { name: 'onclick', kind: 'handler', apply: (o, v) => (o.onclick = new THandler(String(v))) },
-                        { name: 'oncreate', kind: 'handler', apply: (o, v) => (o.oncreate = new THandler(String(v))) }
+                        { name: 'onclick', kind: 'handler', apply: (o, v) => (o.onclick = new THandler(String(v))) }
+                        //{ name: 'oncreate', kind: 'handler', apply: (o, v) => (o.oncreate = new THandler(String(v))) }
                 ];
         }
-        // Parse HTML attributes into a plain object
-        parsePropsFromElement(el: Element): Record<string, unknown> {
-                const out: Record<string, unknown> = {};
 
-                // 1) JSON bulk
-                const raw = el.getAttribute('data-props');
-                if (raw) {
-                        try {
-                                Object.assign(out, JSON.parse(raw));
-                        } catch (e) {
-                                console.error('Invalid JSON in data-props', raw, e);
-                        }
-                }
-
-                // 2) Whitelist: only declared props override / complement
-                for (const p of this.defProps()) {
-                        const attr = el.getAttribute(`data-${p.name}`);
-                        if (attr !== null) out[p.name] = attr;
-                }
-
-                return out;
-        }
-
+        /*
         applyProps(obj: any, values: Record<string, unknown>) {
                 for (const p of this.defProps()) {
                         if (Object.prototype.hasOwnProperty.call(values, p.name)) {
@@ -187,6 +167,9 @@ export class TMetaComponent extends TMetaclass {
                         }
                 }
         }
+                */
+
+        // English comments as requested.
 
         /*
         applyPropsFromElement(obj: any, el: Element) {
@@ -206,8 +189,9 @@ type ComponentProps = {
         color?: TColor; // ou TColor, etc.
         name?: string;
         component?: string;
-        enabled?: boolean;
 };
+
+//type RawProp = Record<string, string>;
 
 export class TComponent {
         getMetaclass(): TMetaComponent {
@@ -232,6 +216,7 @@ export class TComponent {
         }
 
         declare props: ComponentProps;
+        //rawProps: RawProp[] = [];
 
         /** May contain child components */
         allowsChildren(): boolean {
@@ -239,10 +224,29 @@ export class TComponent {
         }
 
         get color(): TColor {
-                return new TColor(this.getStyleProp('color'));
+                return this.props.color ?? new TColor('default');
         }
-        set color(v: TColor) {
-                this.setStyleProp('color', v.s);
+
+        set color(color) {
+                this.props.color = color;
+                const el = this.htmlElement;
+                if (!el) return;
+
+                this.setStyleProp('color', this.color.s);
+        }
+
+        get onclick(): THandler {
+                return this.props.onclick ?? new THandler('');
+        }
+        set onclick(handler) {
+                this.props.onclick = handler;
+        }
+
+        syncDomFromProps() {
+                const el = this.htmlElement;
+                if (!el) return;
+
+                this.setStyleProp('color', this.color.s);
         }
 
         get backgroundColor(): TColor {
@@ -429,38 +433,84 @@ export class TComponentRegistry extends TObject {
                 return document.body ?? document.documentElement;
         }
 
-        private readProps(el: Element, meta: TMetaComponent) {
-                const out: Record<string, any> = {};
-                for (const spec of meta.defProps()) {
-                        const raw = el.getAttribute(`data-${spec.name}`);
-                        if (raw == null) continue;
-
-                        out[spec.name] = this.convert(raw, spec.kind);
-                }
-                return out;
-        }
-
         private convert(raw: string, kind: PropKind) {
-                switch (kind) {
-                        case 'string':
-                                return raw;
-                        case 'number':
-                                return Number(raw);
-                        case 'boolean':
-                                return raw === 'true' || raw === '1' || raw === '';
-                        case 'color':
-                                return raw; // ou parse en TColor si vous avez
-                }
-        }
-
-        applyProps(child: TComponent, cls: TMetaComponent) {
-                const props = this.readProps(child.elem!, cls);
-                for (const spec of cls.defProps()) {
-                        if (props[spec.name] !== undefined) {
-                                spec.apply(child, props[spec.name]);
+                if (typeof raw === 'string') {
+                        switch (kind) {
+                                case 'string':
+                                        return raw;
+                                case 'number':
+                                        return Number(raw);
+                                case 'boolean':
+                                        return raw === 'true' || raw === '1' || raw === '';
+                                case 'color':
+                                        return new TColor(raw); // ou parse en TColor si vous avez
                         }
                 }
         }
+
+        // Parse HTML attributes into a plain object
+        // This function is called juste once, in buildComponentTree(), after the Form is created.
+        parsePropsFromElement(el: Element, defProps: PropSpec<any>[]): Record<string, unknown> {
+                const out: Record<string, unknown> = {};
+
+                // 1) JSON bulk
+                const raw = el.getAttribute('data-props');
+                if (raw) {
+                        try {
+                                const r = raw ? JSON.parse(raw) : {};
+                                //for (const p of props()) {
+                                for (const spec of defProps) {
+                                        const v = r[spec.name];
+                                        if (v != undefined && v != null) {
+                                                const value = this.convert(v, spec.kind);
+
+                                                out[spec.name] = value; // This is done by spec.apply()
+                                                //spec.apply(out, v);
+                                        }
+                                }
+                                //}
+                        } catch (e) {
+                                console.error('Invalid JSON in data-props', raw, e);
+                        }
+                }
+
+                // 2) Whitelist: only declared props override / complement
+                //const defProps = this.collectDefProps();
+                for (const p of defProps) {
+                        const attr = el.getAttribute(`data-${p.name}`);
+                        if (attr !== null) {
+                                const x = this.convert(attr, p.kind);
+                                out[p.name] = x;
+                        }
+                }
+
+                return out;
+        }
+
+        collectDefProps(comp: TMetaComponent): PropSpec<any>[] {
+                const out: PropSpec<any>[] = [];
+                const seen = new Set<string>();
+
+                // Walk up metaclass inheritance: this -> super -> super...
+                let mc: TMetaComponent | null = comp;
+
+                while (mc) {
+                        if (typeof mc.defProps === 'function') {
+                                for (const spec of mc.defProps()) {
+                                        // Child overrides parent if same name.
+                                        if (!seen.has(spec.name)) {
+                                                out.push(spec);
+                                                seen.add(spec.name);
+                                        }
+                                }
+                        }
+                        mc = (mc.superClass as TMetaComponent) ?? null;
+                }
+
+                return out;
+        }
+
+        // This function is called juste once, in buildComponentTree(), when the form is created
 
         buildComponentTree(form: TForm, component: TComponent) {
                 this.clear();
@@ -480,7 +530,7 @@ export class TComponentRegistry extends TObject {
                         const cls = TApplication.TheApplication.types.get(type!);
                         if (!cls) return;
 
-                        const child = cls.create(name!, form, component);
+                        const child: TComponent = cls.create(name!, form, component);
                         // name: string, form: TForm, parent: TComponent, elem: HTMLElement
                         if (!child) return;
 
@@ -490,14 +540,53 @@ export class TComponentRegistry extends TObject {
                         //child.form = form;
                         //child.name = name!;
                         // Optional props
-                        child.props = cls.parsePropsFromElement(el);
+
+                        // We collect
+                        const allDefPropsCollected = this.collectDefProps(cls); // This is done during runtime, but could be done at compiletime
+                        child.props = this.parsePropsFromElement(el, allDefPropsCollected);
+                        child.syncDomFromProps();
+                        //const rawProps = child.rawProps;
+                        //child.props = new Object();
+                        //for (const props in child.props) {
+                        /*
+                        for (const spec of cls.allDefPropsCollected) {
+                                const specName : string = spec.name;
+                                const value  = rawProps[specName];
+                               
+                                //if (spec.name == props[spec.name]) {
+                                        //spec.apply(child, this.convert(props[spec.name], spec.kind));
+
+                                        if (value !== undefined) {
+                                                child.props[propName] =  this.convert(value, spec.kind);
+                                                spec.apply(child, child.props[propName] );
+                                        }
+                                }
+                        }
+                        //}
+
+                        for (const spec of cls.allDefPropsCollected) {
+                                if (props[spec.name] !== undefined) {
+                                        spec.apply(child, props[spec.name]);
+                                }
+                        }
+
+                        for (const props in child.props) {
+                                for (const spec of cls.defProps()) {
+                                        if (props[spec.name] !== undefined) {
+                                                spec.apply(child, props[spec.name]);
+                                        }
+                                }
+                        }
+                                
+
                         this.applyProps(child, cls);
+                        */
 
                         //const props = cls.applyPropsFromElement(child, el);
                         //child.props = props;
                         (child as any).onAttachedToDom?.();
 
-                        this.applyProps(child, cls);
+                        //this.applyProps(child, cls);
                         this.registerInstance(name!, child);
                         component.children.push(child);
                         const maybeHost = child as unknown as Partial<IPluginHost>;
@@ -733,15 +822,17 @@ export class TButton extends TComponent {
         }
         set caption(caption: string) {
                 this.bprops.caption = caption;
-                this.syncDomFromProps();
+                const el = this.htmlElement;
+                if (!el) return;
+                el.textContent = this.caption;
         }
 
         get enabled(): boolean {
-                return this.props.enabled ?? true;
+                return this.bprops.enabled ?? true;
         }
         set enabled(enabled) {
-                this.props.enabled = enabled;
-                this.syncDomFromProps();
+                this.bprops.enabled = enabled;
+                this.htmlButton().disabled = !enabled;
         }
 
         constructor(name: string, form: TForm, parent: TComponent) {
@@ -753,6 +844,7 @@ export class TButton extends TComponent {
 
                 el.textContent = this.caption;
                 this.htmlButton().disabled = !this.enabled;
+                super.syncDomFromProps();
         }
 }
 
@@ -774,11 +866,10 @@ export class TMetaButton extends TMetaComponent {
                 return new TButton(name, form, parent);
         }
 
-        props(): PropSpec<TButton>[] {
+        defProps(): PropSpec<TButton>[] {
                 return [
                         { name: 'caption', kind: 'string', apply: (o, v) => (o.caption = String(v)) },
-                        { name: 'enabled', kind: 'boolean', apply: (o, v) => (o.enabled = Boolean(v)) },
-                        { name: 'color', kind: 'color', apply: (o, v) => (o.color = v as any) }
+                        { name: 'enabled', kind: 'boolean', apply: (o, v) => (o.enabled = Boolean(v)) }
                 ];
         }
 }

@@ -9,7 +9,7 @@ import { TForm, TColor, TApplication, TComponent, TButton, PluginRegistry } from
 import { createHelloVuePlugin } from './createHelloVuePlugin'
 
 console.log('I AM ZAZAVUE')
-// eslint-disable-next-line no-debugger
+
 // oxlint-disable-next-line no-debugger
 debugger
 
@@ -53,13 +53,13 @@ const runtime = {
 */
 
   protected onMyCreate(_ev: Event | null, _sender: TComponent) {
-    const btn = this.componentRegistry.get('button1')
-    if (btn) btn.color = TColor.rgb(0, 0, 255)
+    //const btn = this.componentRegistry.get('button1')
+    //if (btn) btn.color = TColor.rgb(0, 0, 255)
   }
 
   protected onMyShown(_ev: Event | null, _sender: TComponent) {
-    const btn = this.componentRegistry.get('buttonx')
-    if (btn) btn.color = TColor.rgb(0, 255, 255)
+    //const btn = this.componentRegistry.get('buttonx')
+    //if (btn) btn.color = TColor.rgb(0, 255, 255)
   }
 
   button1_onclick(_ev: Event | null, _sender: TComponent) {
@@ -69,7 +69,7 @@ const runtime = {
       return
     }
     //btn.color = TColor.rgb(0, 0, 255);
-    btn!.color = TColor.rgb(255, 0, 0)
+    btn!.color = TColor.rgb(0, 0, 255)
     btn!.caption = 'MIMI'
     btn!.enabled = false
     console.log('Button1 clicked!!!!')
