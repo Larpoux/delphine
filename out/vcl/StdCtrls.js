@@ -207,6 +207,15 @@ class THandler {
     constructor(s) {
         this.s = s;
     }
+    fire(form, handlerName, ev, sender) {
+        const maybeMethod = form[this.s];
+        if (typeof maybeMethod !== 'function') {
+            console.log('NOT A METHOD', handlerName);
+            return false;
+        }
+        // If sender is missing, fallback to the form itself (safe)
+        maybeMethod.call(form, ev, sender ?? this);
+    }
 }
 exports.THandler = THandler;
 class TMetaComponentRegistry extends TMetaclass {
@@ -286,6 +295,8 @@ class TComponentRegistry extends TObject {
                     return raw === 'true' || raw === '1' || raw === '';
                 case 'color':
                     return new TColor(raw); // ou parse en TColor si vous avez
+                case 'handler':
+                    return new THandler(raw);
             }
         }
     }
@@ -343,90 +354,67 @@ class TComponentRegistry extends TObject {
         }
         return out;
     }
-    // This function is called juste once, in buildComponentTree(), when the form is created
-    buildComponentTree(form, component) {
+    processElem(el, form, parent) {
+        const name = el.getAttribute('data-name');
+        const type = el.getAttribute('data-component');
+        const cls = TApplication.TheApplication.types.get(type);
+        if (!cls)
+            return;
+        let child = parent;
+        if (cls != TMetaForm.metaclass) {
+            // The TForm is already created by the user.
+            child = cls.create(name, form, parent);
+        }
+        this.registerInstance(name, child);
+        // name: string, form: TForm, parent: TComponent, elem: HTMLElement
+        if (!child)
+            return;
+        //child.parent = component;
+        child.elem = el;
+        //child.form = form;
+        //child.name = name!;
+        // Optional props
+        // We collect
+        const allDefPropsCollected = this.collectDefProps(cls); // This is done during runtime, but could be done at compiletime
+        child.props = this.parsePropsFromElement(el, allDefPropsCollected);
+        child.syncDomFromProps();
+        //const rawProps = child.rawProps;
+        //child.props = new Object();
+        //for (const props in child.props) {
+        //const props = cls.applyPropsFromElement(child, el);
+        //child.props = props;
+        child.onAttachedToDom?.();
+        //this.applyProps(child, cls);
+        parent.children.push(child);
+        const maybeHost = child;
+        if (maybeHost && typeof maybeHost.setPluginSpec === 'function') {
+            const plugin = el.getAttribute('data-plugin');
+            const raw = el.getAttribute('data-props');
+            const props = raw ? JSON.parse(raw) : {};
+            maybeHost.setPluginSpec({ plugin, props });
+            maybeHost.mountPluginIfReady(this.services);
+            //maybeHost.mountFromRegistry(services);
+        }
+        // Actually this does not work for TForm : infinite recursion
+        if (child.allowsChildren()) {
+            //this.buildComponentTree(form, child);
+        }
+        //if (el === root) return; // No need to go higher in the hierachy
+    }
+    // This function is called juste once, when the form is created
+    buildComponentTree(form, root) {
         this.clear();
         // --- FORM ---
         // provisoirement if (root.getAttribute('data-component') === 'TForm') {
-        this.registerInstance(component.name, form);
+        //const el = root.elem!;
+        //this.registerInstance(root.name, form);
         //}
-        const root = component.elem;
+        const rootElem = root.elem;
+        this.processElem(rootElem, form, root);
         // --- CHILD COMPONENTS ---
-        root.querySelectorAll(':scope > [data-component]').forEach((el) => {
-            if (el === root)
-                return;
-            const name = el.getAttribute('data-name');
-            const type = el.getAttribute('data-component');
-            const cls = TApplication.TheApplication.types.get(type);
-            if (!cls)
-                return;
-            const child = cls.create(name, form, component);
-            // name: string, form: TForm, parent: TComponent, elem: HTMLElement
-            if (!child)
-                return;
-            //child.parent = component;
-            child.elem = el;
-            //child.form = form;
-            //child.name = name!;
-            // Optional props
-            // We collect
-            const allDefPropsCollected = this.collectDefProps(cls); // This is done during runtime, but could be done at compiletime
-            child.props = this.parsePropsFromElement(el, allDefPropsCollected);
-            child.syncDomFromProps();
-            //const rawProps = child.rawProps;
-            //child.props = new Object();
-            //for (const props in child.props) {
-            /*
-            for (const spec of cls.allDefPropsCollected) {
-                    const specName : string = spec.name;
-                    const value  = rawProps[specName];
-                   
-                    //if (spec.name == props[spec.name]) {
-                            //spec.apply(child, this.convert(props[spec.name], spec.kind));
-
-                            if (value !== undefined) {
-                                    child.props[propName] =  this.convert(value, spec.kind);
-                                    spec.apply(child, child.props[propName] );
-                            }
-                    }
-            }
-            //}
-
-            for (const spec of cls.allDefPropsCollected) {
-                    if (props[spec.name] !== undefined) {
-                            spec.apply(child, props[spec.name]);
-                    }
-            }
-
-            for (const props in child.props) {
-                    for (const spec of cls.defProps()) {
-                            if (props[spec.name] !== undefined) {
-                                    spec.apply(child, props[spec.name]);
-                            }
-                    }
-            }
-                    
-
-            this.applyProps(child, cls);
-            */
-            //const props = cls.applyPropsFromElement(child, el);
-            //child.props = props;
-            child.onAttachedToDom?.();
-            //this.applyProps(child, cls);
-            this.registerInstance(name, child);
-            component.children.push(child);
-            const maybeHost = child;
-            if (maybeHost && typeof maybeHost.setPluginSpec === 'function') {
-                const plugin = el.getAttribute('data-plugin');
-                const raw = el.getAttribute('data-props');
-                const props = raw ? JSON.parse(raw) : {};
-                maybeHost.setPluginSpec({ plugin, props });
-                maybeHost.mountPluginIfReady(this.services);
-                //maybeHost.mountFromRegistry(services);
-            }
-            if (child.allowsChildren()) {
-                this.buildComponentTree(form, child);
-            }
+        rootElem.querySelectorAll(':scope > [data-component]').forEach((el) => {
+            this.processElem(el, form, root);
+            //if (el === root) return;
         });
     }
 }
@@ -446,7 +434,7 @@ class TMetaDocument extends TMetaObject {
     constructor(superClass) {
         super(superClass);
         // et vous changez juste le nom :
-        this.typeName = 'TestB';
+        this.typeName = 'TDocument';
     }
     getMetaclass() {
         return TMetaDocument.metaclass;
@@ -461,17 +449,28 @@ class TMetaForm extends TMetaComponent {
     constructor(superClass) {
         super(superClass);
         // et vous changez juste le nom :
-        this.typeName = 'TComponent';
+        this.typeName = 'TForm';
     }
     //readonly typeName = 'TForm';
     create(name, form, parent) {
         return new TForm(name);
     }
-    props() {
-        return [];
+    //props(): PropSpec<TForm>[] {
+    //return [];
+    //}
+    defProps() {
+        return [
+        //{ name: 'caption', kind: 'string', apply: (o, v) => (o.caption = String(v)) },
+        //{ name: 'enabled', kind: 'boolean', apply: (o, v) => (o.enabled = Boolean(v)) }
+        ];
     }
 }
 exports.TMetaForm = TMetaForm;
+//type FormProps = ComponentProps & {
+//caption?: string;
+//enabled?: boolean;
+//color?: TColor; // ou TColor, etc.
+//};
 class TForm extends TComponent {
     getMetaclass() {
         return TMetaForm.metaclass;
@@ -524,40 +523,25 @@ class TForm extends TComponent {
         this._ac?.abort();
         this._ac = null;
     }
-    handleEvent(ev, el, attribute) {
-        const handlerName = el.getAttribute(attribute);
-        // If we found a handler on this element, dispatch it
-        if (handlerName && handlerName !== '') {
-            const name = el.getAttribute('data-name');
-            const sender = name ? (this.componentRegistry.get(name) ?? null) : null;
-            const maybeMethod = this[handlerName];
-            if (typeof maybeMethod !== 'function') {
-                console.log('NOT A METHOD', handlerName);
-                return false;
-            }
-            // If sender is missing, fallback to the form itself (safe)
-            maybeMethod.call(this, ev, sender ?? this);
-            return true;
-        }
-        return false;
-    }
     // We received an DOM Event. Dispatch it
     dispatchDomEvent(ev) {
         const targetElem = ev.target;
         if (!targetElem)
             return;
-        const evType = ev.type;
+        const propName = `on${ev.type}`;
         let el = targetElem.closest('[data-component]');
-        while (el) {
-            if (this.handleEvent(ev, el, `data-on${evType}`))
+        if (!el)
+            return;
+        const name = el.getAttribute('data-name');
+        let comp = name ? this.componentRegistry.get(name) : null;
+        while (comp) {
+            const handler = comp?.props[propName];
+            if (handler && handler.s && handler.s != '') {
+                handler.fire(this, propName, ev, comp);
                 return;
-            //el = this.nextComponentElementUp(el);
-            const name = el.getAttribute('data-name');
-            const comp = name ? this.componentRegistry.get(name) : null;
-            // Prefer your VCL-like parent chain when available
-            const next = comp?.parent?.elem ?? null;
-            // Fallback: standard DOM parent
-            el = next ?? el.parentElement?.closest('[data-component]') ?? null;
+            }
+            //el = next ?? el.parentElement?.closest('[data-component]') ?? null;
+            comp = comp.parent;
         }
         // No handler here: try going "up" using your component tree if possible
     }
@@ -750,9 +734,9 @@ export class PluginHost<Props extends Json = Json> extends TComponent {
 }
         */
 class TMetaPluginHost extends TMetaComponent {
-    static metaClass = new TMetaPluginHost(TMetaComponent.metaclass);
-    getMetaClass() {
-        return TMetaPluginHost.metaClass;
+    static metaclass = new TMetaPluginHost(TMetaComponent.metaclass);
+    getMetaclass() {
+        return TMetaPluginHost.metaclass;
     }
     typeName = 'TPluginHost';
     create(name, form, parent) {

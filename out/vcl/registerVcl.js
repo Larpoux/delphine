@@ -8,7 +8,8 @@ const _vcl_1 = require("@vcl");
 // English comments as requested.
 function registerBuiltins(types) {
     types.register(_vcl_1.TMetaButton.metaclass);
-    types.register(_vcl_1.TMetaPluginHost.metaClass);
+    types.register(_vcl_1.TMetaPluginHost.metaclass);
+    types.register(_vcl_1.TMetaForm.metaclass);
     // types.register(TEditClass);
     // types.register(TLabelClass);
 }
