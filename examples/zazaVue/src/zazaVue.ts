@@ -4,7 +4,7 @@ console.log('🔥 I AM ZAZAVUE – ENTRY EXECUTED')
 
 console.log('I AM ZAZAVUE')
 
-import { TForm, TColor, TApplication, TComponent, TButton, PluginRegistry } from '@vcl'
+import { TForm, TColor, TApplication, TComponent, TButton, PluginRegistry, TPanel } from '@vcl'
 //import { TPluginHost } from '@drt/UIPlugin'
 import { createHelloVuePlugin } from './createHelloVuePlugin'
 
@@ -73,6 +73,16 @@ const runtime = {
     btn!.caption = 'MIMI'
     btn!.enabled = false
     console.log('Button1 clicked!!!!')
+  }
+
+  subButton1_onclick(_ev: Event | null, _sender: TComponent) {
+    const panel = this.componentRegistry.get<TPanel>('myPanel')
+    if (!panel) {
+      console.warn('myPanel not found in registry')
+      return
+    }
+    //btn.color = TColor.rgb(0, 0, 255);
+    panel!.backgroundColor = TColor.rgb(54, 127, 173)
   }
 
   zaza_onclick(_ev: Event | null, _sender: TComponent) {
