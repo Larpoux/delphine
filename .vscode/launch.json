@@ -17,12 +17,31 @@
                         "port": 9222,
                         "webRoot": "${workspaceFolder}",
                         "sourceMaps": true
+                },
+                {
+                        "name": "Vite: debug zazaVue (Chrome)",
+                        "type": "chrome",
+                        "request": "launch",
+                        "url": "http://localhost:5179/src/zazaVue.html",
+                        "webRoot": "${workspaceFolder}/examples/zazaVue",
+                        "sourceMaps": true,
+                        "trace": true
                 }
         ],
         "compounds": [
                 {
                         "name": "Run + Attach Webview",
                         "configurations": ["Run Extension", "Attach Webview (Chrome)"]
+                }
+        ],
+        "tasks": [
+                {
+                        "label": "Start Vite dev server (zazaVue)",
+                        "type": "shell",
+                        "command": "${workspaceFolder}/bin/preview-server.sh",
+                        "isBackground": true,
+                        "problemMatcher": [],
+                        "presentation": { "reveal": "always" }
                 }
         ]
 }

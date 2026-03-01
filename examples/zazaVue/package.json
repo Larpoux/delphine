@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "npm run type-check && npm run build-only",
+    "dev": "vite --port 5179 --strictPort",
+    "build": "vite build",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc -p tsconfig.app.json --noEmit",

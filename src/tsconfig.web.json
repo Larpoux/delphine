@@ -9,7 +9,9 @@
                 "noEmitOnError": true,
 
                 "skipLibCheck": true,
-                "types": []
+                "types": [],
+                "sourceMap": true,
+                "inlineSources": true
         },
         "include": ["webview/*.ts"]
 }
